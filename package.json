@@ -1,1 +1,1 @@
-{"name":"cloude-trading-app","version":"1.0.0","private":true,"description":"Cloude Trading – Handy-Dashboard (PWA) für Render","main":"server.js","scripts":{"start":"node server.js","test":"node test.js"},"engines":{"node":">=18"},"dependencies":{}}
+{"name":"cloude-trading-app","version":"1.1.0","private":true,"description":"Cloude Trading \u2013 Handy-Dashboard (PWA) f\u00fcr Render","main":"server.js","scripts":{"start":"node server.js","test":"node test.js"},"engines":{"node":">=18"},"dependencies":{}}

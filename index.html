@@ -30,12 +30,14 @@
   <div class="accbar" id="acc"></div>
   <div class="cards" id="cards"></div>
   <section><h2>Steuerung <small>per Telegram</small></h2><div class="ctl" id="ctl"></div><p class="hint">Die App ist nur lesend. Die Knöpfe öffnen den Telegram-Bot mit dem Befehl – dort auf „Starten“ tippen. Antworten gibt es nur in deinem Chat.</p></section>
+  <section><h2>Trade-Mitteilungen <small id="pstat">–</small></h2><div id="evs"></div><div class="pbtn" id="pbox"></div><p class="hint" id="pinfo"></p></section>
   <section><h2>Offene Positionen</h2><div id="pos"></div></section>
   <section><h2>Letzte Trades</h2><div id="hist"></div></section>
   <section><h2>Journal <small>letzte Entscheidungen</small></h2><div id="dec"></div></section>
   <footer><span id="foot">–</span> · <a href="#" id="logout">Gerät abmelden</a></footer>
   <svg id="beams"></svg>
 </div>
+<div id="toast" class="toast" hidden></div>
 <script src="globe.js"></script>
 <script src="app.js"></script>
 </body></html>

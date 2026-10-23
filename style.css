@@ -30,3 +30,11 @@ footer{margin-top:22px;font-size:11px;color:#7f93b8;text-align:center}footer a{c
 .agent .st{position:absolute;top:7px;right:7px;width:8px;height:8px;padding:0;font-size:0;border-radius:50%;background:#5b6b8a}
 .agent .st.done{background:#6cb6ff;box-shadow:0 0 8px #0a84ff}.agent .st.working{background:#fbbf24;box-shadow:0 0 8px #fbbf24}.agent .st.error{background:#ff453a;box-shadow:0 0 8px #ff453a}
 .agent .nm{padding-right:10px;overflow:hidden;text-overflow:ellipsis}
+
+/* Trade-Mitteilungen */
+.pbtn button{width:100%;margin-top:8px;padding:12px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font:600 15px system-ui}
+.pbtn button.ghost{background:transparent;border:1px solid #2a3245;color:#9aa4b8}
+.row.ev.eup{border-left:3px solid #30d158;padding-left:8px}.row.ev.edn{border-left:3px solid #ff453a;padding-left:8px}
+.tchip{font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:#3a2f00;color:#ffd60a;margin-left:6px}
+.toast{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:50;padding:12px 14px;border-radius:14px;background:#0d1220;border:1px solid #2a3245;box-shadow:0 8px 30px #000a}
+.toast.eup{border-color:#30d158}.toast.eup b{color:#30d158}.toast.edn{border-color:#ff453a}.toast.edn b{color:#ff453a}.toast[hidden]{display:none}

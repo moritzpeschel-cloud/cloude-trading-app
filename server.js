@@ -1,9 +1,10 @@
 // Cloude Trading – Handy-Dashboard (Render Web Service, ohne npm-Abhängigkeiten).
 // Der Bot pusht ausgehend: POST /api/update  (Authorization: Bearer <API_TOKEN>)  -> letzter Snapshot im Speicher.
 // Das Handy meldet sich mit der View-PIN an: POST /api/login {pin} -> Sitzungs-Token (HMAC, 180 Tage) -> GET /api/state.
-// ENV: API_TOKEN (Push-Token), VIEW_PIN (Anzeige-PIN), optional SESSION_SECRET, PORT.
+// Trade-Mitteilungen (Web-Push, push.js): POST /api/event (Bearer API_TOKEN) -> Push an alle Abos; /api/events, /api/push/* (Sitzung).
+// ENV: API_TOKEN (Push-Token), VIEW_PIN (Anzeige-PIN), optional SESSION_SECRET, VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY, PORT.
 'use strict';
-const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
+const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto'), push = require('./push');
 const PORT = +process.env.PORT || 3000, API_TOKEN = process.env.API_TOKEN || '', VIEW_PIN = process.env.VIEW_PIN || '';
 const SECRET = process.env.SESSION_SECRET || crypto.createHash('sha256').update('ct|' + API_TOKEN + '|' + VIEW_PIN).digest('hex');
 const PUB = fs.existsSync(path.join(__dirname, 'public')) ? path.join(__dirname, 'public') : __dirname, MAX_BODY = 512 * 1024, SESSION_DAYS = 180;
@@ -46,6 +47,11 @@ const server = http.createServer(async (req, res) => {
       if (!valid(t)) return send(res, 401, { error: 'Anmeldung nötig' });
       if (!SNAP) return send(res, 503, { error: 'Noch keine Daten vom Bot (Server gerade neu gestartet?)' });
       return send(res, 200, { ...SNAP, serverAgeS: Math.round((Date.now() - LAST) / 1000) });
+    }
+    if (p.startsWith('/api/event') || p.startsWith('/api/push/')) {   // Trade-Mitteilungen (Web-Push) – siehe push.js
+      const bearer = () => String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      const r = await push.handle(p, req, res, { send, body, token: API_TOKEN, bearerOk: () => !!API_TOKEN && eq(bearer(), API_TOKEN), sessionOk: () => valid(bearer()) });
+      if (r !== false) return;
     }
     if (p.startsWith('/api/')) return send(res, 404, { error: 'not found' });
     let f = path.normalize(path.join(PUB, p === '/' ? 'index.html' : decodeURIComponent(p)));

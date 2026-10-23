@@ -21,7 +21,7 @@ $('#logout').onclick=e=>{e.preventDefault();if(!confirm('Dieses Gerät abmelden?
 const eur=v=>v==null?'–':Number(v).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const sg=v=>v==null?'–':(v>0?'+':v<0?'−':'')+Number(Math.abs(v)).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €',cls=v=>v>0?'up':v<0?'dn':'';
 const tm=s=>s?String(s).replace('T',' ').slice(5,16).replace(/^(\d\d)-(\d\d)/,'$2.$1.'):'';
-function render(s,offline){SNAP=s;$('#app').classList.remove('hidden');$('#lock').classList.add('hidden');
+function render(s,offline){SNAP=s;pushStart();$('#app').classList.remove('hidden');$('#lock').classList.add('hidden');
  const age=Math.max(0,Date.now()/1000-s.gen),a=$('#age');a.textContent=(offline?'offline · ':'')+'Stand '+new Date(s.gen*1000).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+(age>90?` (vor ${Math.round(age/60)} Min.)`:'');a.className='age'+(age>300?' stale':'');
  const ch=(c,t)=>`<span class="chip ${c}"><i></i>${t}</span>`;
  $('#chips').innerHTML=ch(s.connected?'ok':'bad',s.mode=='LIVE-DEMO'?(s.connected?'Demo verbunden':'Demo getrennt'):'Paper-Modus')+ch(s.kill?'bad':'ok',s.kill?'Not-Aus AN':'Not-Aus aus')
@@ -52,6 +52,39 @@ function beam(card){const svg=$('#beams'),cv=$('#globe');if(!svg||!cv||!GL)retur
  dot.setAttribute('r',5);dot.setAttribute('fill','#dff1ff');svg.append(dot);const Lg=p2.getTotalLength();[p1,p2].forEach(p=>{p.style.strokeDasharray=Lg;p.style.strokeDashoffset=Lg});card.classList.add('flash');
  const t0=performance.now(),T=900;(function step(t){const k=Math.min(1,(t-t0)/T),e=1-Math.pow(1-k,3);[p1,p2].forEach(p=>p.style.strokeDashoffset=Lg*(1-e));const pt=p2.getPointAtLength(Lg*e);dot.setAttribute('cx',pt.x);dot.setAttribute('cy',pt.y);
   if(k<1)requestAnimationFrame(step);else{GL.hit(tgt);dot.remove();setTimeout(()=>card.classList.remove('flash'),500);const t1=performance.now();(function fade(t){const q=Math.min(1,(t-t1)/700);[p1,p2].forEach(p=>p.style.opacity=1-q);if(q<1)requestAnimationFrame(fade);else{p1.remove();p2.remove()}})(t1)}})(t0)}
+// ---- Trade-Mitteilungen (Web-Push wie beim Gold Bot) + Verlauf + Toast, solange die App offen ist
+const pushOK=()=>'serviceWorker'in navigator&&'PushManager'in window&&'Notification'in window,iOS=/iPhone|iPad|iPod/.test(navigator.userAgent),
+ standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;let PINFO='';
+const u8=s=>{const p='='.repeat((4-s.length%4)%4);return Uint8Array.from(atob((s+p).replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))},
+ keyOf=sub=>{try{return btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}catch(_){return''}};
+const api=(p,o={})=>fetch(p,{...o,cache:'no-store',headers:{'Content-Type':'application/json',Authorization:'Bearer '+TOK,...(o.headers||{})}});
+async function subscribe(ask){
+ if(!pushOK()){PINFO=iOS&&!standalone()?'iPhone: zuerst in Safari „Teilen → Zum Home-Bildschirm“, dann die App vom Home-Bildschirm öffnen (iOS 16.4+).':'Dieser Browser unterstützt keine Mitteilungen.';return pushUI()}
+ try{if(ask){const r=await Notification.requestPermission();if(r!=='granted'){PINFO='Mitteilungen nicht erlaubt – in den iPhone-Einstellungen → Mitteilungen → Cloude änderbar.';return pushUI()}}
+  if(Notification.permission!=='granted')return pushUI();
+  const k=await (await api('api/push/key')).json();if(!k.publicKey)throw new Error('Server ohne Push-Schlüssel');
+  const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
+  if(sub&&keyOf(sub)&&keyOf(sub)!==k.publicKey){await sub.unsubscribe();sub=null}
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(k.publicKey)});
+  const r=await api('api/push/subscribe',{method:'POST',body:JSON.stringify({subscription:sub.toJSON()})});if(!r.ok)throw new Error('Server '+r.status);
+  localStorage.setItem('ct_push','1');if(ask)PINFO='Mitteilungen sind aktiv ✓'}
+ catch(e){PINFO='Fehler: '+(e&&e.message||e)}pushUI()}
+async function unsubscribe(){try{const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();
+ if(sub){await api('api/push/unsubscribe',{method:'POST',body:JSON.stringify({subscription:sub.toJSON()})}).catch(()=>{});await sub.unsubscribe()}}catch(_){}
+ localStorage.setItem('ct_push','0');PINFO='Mitteilungen sind aus.';pushUI()}
+function pushUI(){const perm=pushOK()?Notification.permission:'n/a',on=perm==='granted'&&localStorage.getItem('ct_push')==='1';
+ $('#pstat').textContent=perm==='n/a'?(iOS&&!standalone()?'nur in der Home-Bildschirm-App':'nicht unterstützt'):perm==='denied'?'blockiert':on?'aktiv':'aus';
+ $('#pbox').innerHTML=perm==='n/a'||perm==='denied'?'':on?'<button class="ghost" id="poff">Mitteilungen ausschalten</button>':'<button id="pon">🔔 Mitteilungen erlauben</button>';
+ const a=$('#pon'),b=$('#poff');if(a)a.onclick=()=>subscribe(true);if(b)b.onclick=unsubscribe;
+ $('#pinfo').textContent=PINFO||'Bei jeder Eröffnung: Symbol, BUY/SELL, Lot, Einstieg, SL/TP. Bei jeder Schließung: 🟢 +Gewinn / 🔴 −Verlust in €.'}
+const evc=e=>e.color==='green'?'up':e.color==='red'?'dn':'';
+async function loadEvents(){try{const r=await api('api/events');if(!r.ok)return;const j=await r.json(),ev=(j.events||[]).slice(0,15);
+ $('#evs').innerHTML=ev.length?ev.map(e=>`<div class="row ev e${evc(e)}"><div class="a"><b class="${evc(e)}">${esc(e.title)}</b>${e.test?'<span class="tchip">TEST</span>':''}</div><div class="b">${esc(e.body)} · ${new Date(e.t*1000).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div></div>`).join(''):'<div class="muted">Noch keine Trade-Mitteilungen.</div>'}catch(_){}}
+function toast(e){if(!e||!e.title)return;const t=$('#toast');t.className='toast e'+evc(e);t.innerHTML=`<b>${esc(e.title)}</b><div>${esc(e.body||'')}</div>`;t.hidden=false;
+ clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,7000)}
+if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('message',m=>{const d=m.data||{};if(d.type==='ct-event'){toast(d.event);loadEvents();refresh()}});
+let pushInit=false;function pushStart(){if(pushInit||!TOK)return;pushInit=true;pushUI();loadEvents();setInterval(()=>{if(TOK&&!document.hidden)loadEvents()},60000);
+ if(localStorage.getItem('ct_push')!=='0')subscribe(false)}   // Selbstheilung: Abo bei jedem Start neu anmelden (Render verliert es beim Neustart)
 // ---- Start
 (async()=>{if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
  if(!TOK)showLock('');else await refresh();
