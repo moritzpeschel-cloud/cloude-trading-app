@@ -25,7 +25,7 @@ function render(s,offline){SNAP=s;$('#app').classList.remove('hidden');$('#lock'
  const age=Math.max(0,Date.now()/1000-s.gen),a=$('#age');a.textContent=(offline?'offline · ':'')+'Stand '+new Date(s.gen*1000).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+(age>90?` (vor ${Math.round(age/60)} Min.)`:'');a.className='age'+(age>300?' stale':'');
  const ch=(c,t)=>`<span class="chip ${c}"><i></i>${t}</span>`;
  $('#chips').innerHTML=ch(s.connected?'ok':'bad',s.mode=='LIVE-DEMO'?(s.connected?'Demo verbunden':'Demo getrennt'):'Paper-Modus')+ch(s.kill?'bad':'ok',s.kill?'Not-Aus AN':'Not-Aus aus')
-  +ch(s.auto.on?(s.mode=='LIVE-DEMO'&&!s.auto.armed?'warn':'ok'):'bad','Auto '+(s.auto.on?(s.mode=='LIVE-DEMO'&&!s.auto.armed?'AN (nicht freigegeben)':'AN'):'AUS'))+(age>300?ch('warn','Bot sendet nicht'):'');
+  +ch(s.auto.on?(s.mode=='LIVE-DEMO'&&!s.auto.armed?'warn':'ok'):'bad','Auto '+(s.auto.on?(s.mode=='LIVE-DEMO'&&!s.auto.armed?'AN (nicht freigegeben)':'AN'):'AUS'))+(s.limits?ch('ok','Limits '+esc(s.limits)):'')+(age>300?ch('warn','Bot sendet nicht'):'');
  const c=(l,v,k,sub)=>`<div><div class="l">${l}</div><div class="v ${k||''}">${v}</div>${sub?`<div class="s">${sub}</div>`:''}</div>`,A=s.acc;
  $('#acc').innerHTML=c('Kontostand',eur(A.balance),'',s.mode=='LIVE-DEMO'?'Demo':'Paper')+c('Equity',eur(A.equity))+c('Winrate',A.winrate==null?'–':Math.round(A.winrate*100)+' %','',`${A.wins||0} G / ${A.losses||0} V`)
   +c('Heute',sg(A.today),cls(A.today))+c('Woche',sg(A.week),cls(A.week))+c('Monat',sg(A.month),cls(A.month));
