@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: cloude-trading-app
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: API_TOKEN
+        sync: false
+      - key: VIEW_PIN
+        sync: false
+      - key: NODE_VERSION
+        value: "20"

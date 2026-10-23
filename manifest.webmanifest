@@ -1,0 +1,4 @@
+{"name":"Cloude Trading","short_name":"Cloude","lang":"de","start_url":"./","scope":"./","display":"standalone","orientation":"portrait",
+ "background_color":"#03050b","theme_color":"#03050b","description":"Trading-Bot-Dashboard (Demo) – verschlüsselt",
+ "icons":[{"src":"icons/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icons/icon-512.png","sizes":"512x512","type":"image/png"},
+ {"src":"icons/maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]}
