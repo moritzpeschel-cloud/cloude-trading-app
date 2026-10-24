@@ -21,7 +21,7 @@ $('#logout').onclick=e=>{e.preventDefault();if(!confirm('Dieses Gerät abmelden?
 const eur=v=>v==null?'–':Number(v).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const sg=v=>v==null?'–':(v>0?'+':v<0?'−':'')+Number(Math.abs(v)).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €',cls=v=>v>0?'up':v<0?'dn':'';
 const tm=s=>s?String(s).replace('T',' ').slice(5,16).replace(/^(\d\d)-(\d\d)/,'$2.$1.'):'';
-function render(s,offline){SNAP=s;pushStart();$('#app').classList.remove('hidden');$('#lock').classList.add('hidden');
+function render(s,offline){SNAP=s;$('#app').classList.remove('hidden');$('#lock').classList.add('hidden');setTimeout(()=>{try{pushStart()}catch(e){console.warn('push',e)}},0);
  const age=Math.max(0,Date.now()/1000-s.gen),a=$('#age');a.textContent=(offline?'offline · ':'')+'Stand '+new Date(s.gen*1000).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+(age>90?` (vor ${Math.round(age/60)} Min.)`:'');a.className='age'+(age>300?' stale':'');
  const ch=(c,t)=>`<span class="chip ${c}"><i></i>${t}</span>`;
  $('#chips').innerHTML=ch(s.connected?'ok':'bad',s.mode=='LIVE-DEMO'?(s.connected?'Demo verbunden':'Demo getrennt'):'Paper-Modus')+ch(s.kill?'bad':'ok',s.kill?'Not-Aus AN':'Not-Aus aus')
@@ -72,7 +72,7 @@ async function subscribe(ask){
 async function unsubscribe(){try{const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();
  if(sub){await api('api/push/unsubscribe',{method:'POST',body:JSON.stringify({subscription:sub.toJSON()})}).catch(()=>{});await sub.unsubscribe()}}catch(_){}
  localStorage.setItem('ct_push','0');PINFO='Mitteilungen sind aus.';pushUI()}
-function pushUI(){const perm=pushOK()?Notification.permission:'n/a',on=perm==='granted'&&localStorage.getItem('ct_push')==='1';
+function pushUI(){if(!$('#pstat')||!$('#pbox')||!$('#pinfo'))return;const perm=pushOK()?Notification.permission:'n/a',on=perm==='granted'&&localStorage.getItem('ct_push')==='1';
  $('#pstat').textContent=perm==='n/a'?(iOS&&!standalone()?'nur in der Home-Bildschirm-App':'nicht unterstützt'):perm==='denied'?'blockiert':on?'aktiv':'aus';
  $('#pbox').innerHTML=perm==='n/a'||perm==='denied'?'':on?'<button class="ghost" id="poff">Mitteilungen ausschalten</button>':'<button id="pon">🔔 Mitteilungen erlauben</button>';
  const a=$('#pon'),b=$('#poff');if(a)a.onclick=()=>subscribe(true);if(b)b.onclick=unsubscribe;
@@ -86,6 +86,6 @@ if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('message
 let pushInit=false;function pushStart(){if(pushInit||!TOK)return;pushInit=true;pushUI();loadEvents();setInterval(()=>{if(TOK&&!document.hidden)loadEvents()},60000);
  if(localStorage.getItem('ct_push')!=='0')subscribe(false)}   // Selbstheilung: Abo bei jedem Start neu anmelden (Render verliert es beim Neustart)
 // ---- Start
-(async()=>{if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+(async()=>{if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
  if(!TOK)showLock('');else await refresh();
  setInterval(()=>{if(TOK&&!document.hidden)refresh()},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&TOK)refresh()})})();

@@ -57,7 +57,7 @@ const server = http.createServer(async (req, res) => {
     let f = path.normalize(path.join(PUB, p === '/' ? 'index.html' : decodeURIComponent(p)));
     if (PUB === __dirname) { const flat = path.basename(f); f = /^(index\.html|app\.js|globe\.js|style\.css|sw\.js|manifest\.webmanifest|[a-z0-9-]+\.png)$/.test(flat) ? path.join(PUB, flat) : path.join(PUB, 'index.html'); }
     if (!f.startsWith(PUB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(PUB, 'index.html');
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream', 'Cache-Control': /sw\.js|index\.html/.test(f) ? 'no-cache' : 'public, max-age=3600', ...SEC });
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream', 'Cache-Control': /\.(html|js|css|webmanifest)$/.test(f) ? 'no-cache' : 'public, max-age=3600', ...SEC });
     fs.createReadStream(f).pipe(res);
   } catch (e) { send(res, 400, { error: 'Anfrage ungültig' }); }
 });
