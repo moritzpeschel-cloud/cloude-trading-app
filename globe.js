@@ -28,4 +28,6 @@ function globe(cv){const ctx=cv.getContext('2d'),N=2600,pts=[],lit=[],hits=[];le
   requestAnimationFrame(frame)}requestAnimationFrame(frame);
  return{radius:()=>R,flash:()=>hits.length?Math.max(...hits.map(h=>env(performance.now()-h.t))):0,randomFront(left){const c=Math.cos(rot),s=Math.sin(rot);let X=(left?-1:1)*(.15+Math.random()*.6),Y=(Math.random()-.5)*1.1,Zv=Math.sqrt(Math.max(.05,1-X*X-Y*Y));
    const yy=Y*ct+Zv*stt,zz=-Y*stt+Zv*ct;const x=X*c-zz*s,z=X*s+zz*c;return{p:[x,yy,z],x:X*R,y:-Y*R}},
+  toward(ux,uy){const c=Math.cos(rot),s=Math.sin(rot),k=.3+Math.random()*.45,j=(Math.random()-.5)*.35;let X=ux*k-uy*j,Y=-uy*k-ux*j*.6;const n=Math.hypot(X,Y);if(n>.9){X*=.9/n;Y*=.9/n}const Zv=Math.sqrt(Math.max(.05,1-X*X-Y*Y));
+   const yy=Y*ct+Zv*stt,zz=-Y*stt+Zv*ct;const x=X*c-zz*s,z=X*s+zz*c;return{p:[x,yy,z],x:X*R,y:-Y*R}},
   hit(t){hits.push({p:t.p,t:performance.now()});if(hits.length>8)hits.shift();lit.push({p:t.p,a:1,big:1});for(let i=0;i<10;i++)lit.push({p:pts[(Math.random()*N)|0],a:.6})}}}

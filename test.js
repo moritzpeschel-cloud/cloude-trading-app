@@ -58,6 +58,15 @@ const j = (p, o = {}) => fetch(B + p, { ...o, headers: { 'Content-Type': 'applic
     await j('/api/push/restore', { method: 'POST', body: JSON.stringify({ subs: [{ ...sub, endpoint: 'http://127.0.0.1:3998/gone' }] }), headers: P });
     const r3 = await (await j('/api/event', { method: 'POST', body: JSON.stringify({ ...ev, id: 'open:44', kind: 'open', pnl: null }), headers: P })).json();
     assert.equal(r3.sent, 1); assert.equal(r3.removed, 1);   // abgelaufenes Abo (410) wird entfernt
+    // ---- Einstellungen (Mitteilungen) + Test-Mitteilung
+    assert.equal((await j('/api/prefs', { method: 'POST', body: '{"open":false}' })).status, 401);
+    const pr = await (await j('/api/prefs', { method: 'POST', body: JSON.stringify({ open: false, telegram: true, x: 1 }), headers: S })).json(); assert.equal(pr.prefs.open, false); assert.equal(pr.prefs.x, undefined);
+    assert.equal((await (await j('/api/prefs', { headers: P })).json()).prefs.open, false);
+    assert.equal((await j('/api/prefs/restore', { method: 'POST', body: '{"prefs":{"open":true,"t":1}}', headers: S })).status, 401);
+    await j('/api/prefs/restore', { method: 'POST', body: '{"prefs":{"open":true,"t":1}}', headers: P }); assert.equal((await (await j('/api/prefs', { headers: S })).json()).prefs.open, false);   // älter -> ignoriert
+    const n0 = GOT.length, tr = await (await j('/api/notify/test', { method: 'POST', body: '{}', headers: S })).json(); assert.equal(tr.push.sent, 1); assert.equal(GOT.length, n0 + 1); assert.equal(tr.telegram, 'angefragt');
+    const tq = (await (await j('/api/prefs', { headers: P })).json()).test; assert.ok(tq.id); await j('/api/prefs/ack', { method: 'POST', body: JSON.stringify({ id: tq.id }), headers: P });
+    assert.equal((await (await j('/api/prefs', { headers: P })).json()).test, null);
     console.log('cloud_app: alle Tests bestanden');
   } catch (e) { console.error('FEHLER', e.message); process.exitCode = 1; } finally { srv.kill(); PS.close(); }
 })();

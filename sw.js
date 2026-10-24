@@ -1,6 +1,6 @@
 // App-Hülle: NETWORK-FIRST (immer aktuelle Version vom Server, Cache nur als Offline-Notnagel). /api/* wird nie gecacht.
 // Neue Version wird sofort aktiv (skipWaiting + clients.claim), alte Caches werden gelöscht. Bei jeder Änderung V hochzählen.
-const V='ct-v6',SHELL=['./','index.html','style.css','app.js','globe.js','manifest.webmanifest','icons/icon-192.png','icons/apple-touch-icon.png'];
+const V='ct-v7',SHELL=['./','index.html','style.css','app.js','globe.js','manifest.webmanifest','icons/icon-192.png','icons/apple-touch-icon.png'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(V).then(c=>Promise.all(SHELL.map(u=>fetch(u,{cache:'no-store'}).then(r=>r.ok&&c.put(u,r)).catch(()=>{})))))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('message',e=>{if(e.data==='skipWaiting')self.skipWaiting()});

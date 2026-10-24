@@ -127,4 +127,9 @@ async function handle(p, req, res, h) {
   }
   return false;
 }
-module.exports = { handle, deriveVapid, encrypt, vapidAuth, _reset() { subs = []; events = []; seen = new Set(); VAPID = null; }, _subs: () => subs };
+async function sendTest(token) {   // Test-Mitteilung aus den Einstellungen (keine Order)
+  const ev = cleanEvent({ id: 'test-' + Date.now(), kind: 'test', title: '🧪 TEST · Cloude Trading', body: 'Test-Mitteilung aus den Einstellungen – keine echte Order.', pnl: null });
+  events.push(ev); events = events.slice(-MAX_EVENTS); fs.writeFile(EVENTS_FILE, JSON.stringify(events), () => {});
+  return { subs: subs.length, ...(await sendAll(ev, token)) };
+}
+module.exports = { handle, sendTest, deriveVapid, encrypt, vapidAuth, _reset() { subs = []; events = []; seen = new Set(); VAPID = null; }, _subs: () => subs };

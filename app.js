@@ -2,8 +2,12 @@
 // Cloude Trading – Handy-PWA (nur lesend). Anmeldung mit View-PIN -> Sitzungs-Token (180 Tage) im Gerät; die PIN wird nicht gespeichert.
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const AAD=new TextEncoder().encode('cloude-trading-v1'),b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-const AG=[['scanner','▦','Chart-Scanner'],['news','✉','News-Monitor'],['entry','⏱','Einstiegs-Timer'],['exit','⇥','Ausstiegs-Planer'],['timemachine','∞','Time Machine'],['risk','⛨','Risiko-Manager'],
-['budget','€','Budget-Manager'],['order','➤','Order-Ausführer'],['alerts','🔔','Kurs-Alarme'],['earnings','◔','Earnings-Analyst'],['congress','⚖','Politiker-Tracker'],['claude','✦','KI-Prüfer']];
+// Die 11 Helfer im Ring um den Globus (k, Icon, Name, Kurzname, Aufgabe) + KI-Prüfer als Chip darunter
+const AG=[['scanner','▦','Chart-Scanner','Scanner','scannt Charts nach Ausbrüchen'],['news','✉','News-Monitor','News','liest Schlagzeilen'],['entry','⏱','Einstiegs-Timer','Einstieg','wartet auf Kerzenschluss'],
+['exit','⇥','Ausstiegs-Planer','Ausstieg','setzt SL & TP'],['timemachine','∞','Time Machine','Time M.','10.000 Zukünfte'],['risk','⛨','Risiko-Manager','Risiko','Limits pro Trade / Tag'],
+['budget','€','Budget-Manager','Budget','Konto & Tages-P/L'],['order','➤','Order-Ausführer','Order','führt geprüfte Orders aus'],['alerts','🔔','Kurs-Alarme','Alarme','beobachtet Preise'],
+['earnings','◔','Earnings-Analyst','Earnings','Termine & Zahlen'],['congress','⚖','Politiker-Tracker','Politiker','STOCK-Act-Meldungen']];
+const KI=['claude','✦','KI-Prüfer','KI','prüft jede Order'];const ALL=[...AG,KI];let OPEN=null;
 const BOT='moritz_goldtrading_bot';let TOK=localStorage.getItem('ct_tok'),GL=null,SNAP=null;
 // ---- Daten: GET /api/state mit Sitzungs-Token (die PIN selbst wird nie gespeichert). Offline: letzter Stand aus localStorage.
 async function refresh(){try{const r=await fetch('api/state',{cache:'no-store',headers:{Authorization:'Bearer '+TOK}});
@@ -29,8 +33,11 @@ function render(s,offline){SNAP=s;$('#app').classList.remove('hidden');$('#lock'
  const c=(l,v,k,sub)=>`<div><div class="l">${l}</div><div class="v ${k||''}">${v}</div>${sub?`<div class="s">${sub}</div>`:''}</div>`,A=s.acc;
  $('#acc').innerHTML=c('Kontostand',eur(A.balance),'',s.mode=='LIVE-DEMO'?'Demo':'Paper')+c('Equity',eur(A.equity))+c('Winrate',A.winrate==null?'–':Math.round(A.winrate*100)+' %','',`${A.wins||0} G / ${A.losses||0} V`)
   +c('Heute',sg(A.today),cls(A.today))+c('Woche',sg(A.week),cls(A.week))+c('Monat',sg(A.month),cls(A.month));
- if(!$('#cards').children.length)$('#cards').innerHTML=AG.map(([k,ic,nm])=>`<div class="agent" id="ag-${k}"><div class="ic">${ic}</div><div class="tx"><div class="nm">${nm}<span class="st" id="st-${k}">idle</span></div><div class="rs" id="rs-${k}">–</div></div></div>`).join('');
- for(const [k] of AG){const g=s.agents[k];if(!g)continue;const st=$('#st-'+k);st.className='st '+(g.s||'');st.textContent={working:'arbeitet',done:'fertig',error:'fehler'}[g.s]||g.s||'idle';$('#rs-'+k).textContent=g.t||'–'}
+ if(!$('#cards').children.length){$('#cards').innerHTML=AG.map(([k,ic,nm,sh])=>`<button class="agent" id="ag-${k}" data-k="${k}" aria-label="${esc(nm)}"><span class="ic">${ic}</span><span class="nm">${esc(sh)}</span><span class="st" id="st-${k}"></span></button>`).join('')
+   +`<button class="agent ki" id="ag-claude" data-k="claude"><span class="ic">✦</span><span class="nm">KI-Prüfer</span><span class="st" id="st-claude"></span></button>`;
+  $('#cards').querySelectorAll('.agent').forEach(b=>b.onclick=()=>{OPEN=OPEN===b.dataset.k?null:b.dataset.k;agDetail()});layoutRing();addEventListener('resize',layoutRing)}
+ for(const [k] of ALL){const g=s.agents[k]||{};const st=$('#st-'+k);if(!st)continue;st.className='st '+(g.s||'');$('#ag-'+k).classList.toggle('working',g.s==='working')}
+ agDetail();renderBy(s);prefsUI(s.prefs);
  const B='https://t.me/'+BOT+'?start=',L=(cmd,t,k)=>`<a class="${k||''}" href="${B+cmd}" data-c="${cmd}">${t}</a>`;
  $('#ctl').innerHTML=L('status','📊 Status')+L('notaus','🛑 Not-Aus','red')+L('weiter','✅ Weiter','green')+L('auto_an','🤖 Auto an','green')+L('auto_aus','⏸ Auto aus','red')+L('notaus_alles','⛔ Alles schließen','red');
  $('#ctl').querySelectorAll('a').forEach(x=>x.onclick=e=>{const m={notaus_alles:'Not-Aus und ALLE Positionen schließen?',notaus:'Not-Aus einschalten?',weiter:'Not-Aus ausschalten?',auto_aus:'Auto-Trading ausschalten?',auto_an:'Auto-Trading einschalten?'}[x.dataset.c];if(m&&!confirm(m+' (Telegram öffnet sich)'))e.preventDefault()});
@@ -38,20 +45,51 @@ function render(s,offline){SNAP=s;$('#app').classList.remove('hidden');$('#lock'
  $('#hist').innerHTML=s.hist.length?s.hist.map(h=>`<div class="row"><div class="a"><span>${esc(h.side=='buy'?'KAUF':'VERKAUF')} ${esc(h.vol)} ${esc(h.sym)}</span><b class="${cls(h.pnl)}">${sg(h.pnl)}</b></div><div class="b">${tm(h.close)} · ${esc(h.reason)}</div></div>`).join(''):'<div class="muted">Noch keine geschlossenen Trades.</div>';
  $('#dec').innerHTML=s.dec.length?s.dec.map(d=>`<div class="row"><div class="b">${tm(d.t)}</div><div>${esc(d.text)}</div>${(d.h||[]).map(h=>`<span class="hch ${esc(h.e||'')}" title="${esc(h.t)}">${esc(h.n)}${h.e?' · '+esc(h.e):''}</span>`).join('')}</div>`).join(''):'<div class="muted">Noch keine Entscheidungen.</div>';
  $('#foot').textContent=`Zyklen ${s.auto.cycles??'–'} · letzter Zyklus ${tm(s.auto.last)||'–'} · ${s.auto.result||''}`;
- if(!GL)GL=globe($('#globe'));
+ if(!GL){GL=globe($('#globe'));layoutRing()}
  // Beam + Blitz für neu fertig gewordene Helfer (seit letztem Snapshot)
  const ids=(s.events||[]).map(e=>e.id),mx=ids.length?Math.max(...ids):0;let seen=+(localStorage.getItem('ct_ev')||0);if(mx<seen)seen=0; // Bot neu gestartet -> IDs beginnen neu
  const neu=(s.events||[]).filter(e=>e.id>seen);localStorage.setItem('ct_ev',mx);
- if(seen&&neu.length){const ks=[...new Set(neu.map(e=>e.a))].slice(0,6);ks.forEach((k,i)=>setTimeout(()=>{const el=$('#ag-'+k);if(el)beam(el)},350+i*450))}}
+ if(seen&&neu.length){const ks=[...new Set(neu.map(e=>e.a))].slice(0,8);ks.forEach((k,i)=>setTimeout(()=>{const el=$('#ag-'+k);if(el)beam(el)},350+i*450))}}
+// Ring: 11 Badges gleichmäßig auf einem Kreis um den Globus (Positionen per CSSOM – CSP erlaubt keine Inline-Styles)
+function layoutRing(){const ring=$('#ring');if(!ring)return;const W=ring.clientWidth,H=ring.clientHeight,cx=W/2,cy=H/2,els=AG.map(a=>$('#ag-'+a[0])).filter(Boolean);if(!els.length)return;
+ const bw=els[0].offsetWidth,bh=els[0].offsetHeight,rx=W/2-bw/2-2,ry=H/2-bh/2-2;
+ els.forEach((el,i)=>{const t=-Math.PI/2+i*2*Math.PI/els.length;el.style.left=(cx+Math.cos(t)*rx-bw/2)+'px';el.style.top=(cy+Math.sin(t)*ry-bh/2)+'px';el.dataset.ux=Math.cos(t).toFixed(3);el.dataset.uy=Math.sin(t).toFixed(3)});
+ const ki=$('#ag-claude');if(ki){ki.style.left=(cx-ki.offsetWidth/2)+'px';ki.style.top=(cy+Math.min(W,H)*.225)+'px'}}
+const ST={working:'arbeitet',done:'fertig',error:'Fehler'};
+function agDetail(){const el=$('#agdet');if(!el)return;document.querySelectorAll('.agent').forEach(b=>b.classList.toggle('sel',b.dataset.k===OPEN));
+ const a=ALL.find(x=>x[0]===OPEN);if(!a||!SNAP){el.classList.remove('open');el.innerHTML='';return}const g=(SNAP.agents||{})[a[0]]||{};
+ el.innerHTML=`<div class="ic">${a[1]}</div><div class="tx"><div class="nm">${esc(a[2])} <span class="pill ${esc(g.s||'')}">${esc(ST[g.s]||g.s||'bereit')}</span></div><div class="jb">${esc(a[4])}</div><div class="rs">${esc(g.t||'Noch keine Meldung.')}</div></div><button class="x" aria-label="schließen">×</button>`;
+ el.classList.add('open');el.querySelector('.x').onclick=()=>{OPEN=null;agDetail()}}
 function beam(card){const svg=$('#beams'),cv=$('#globe');if(!svg||!cv||!GL)return;const m=$('#app').getBoundingClientRect(),a=card.getBoundingClientRect(),g=cv.getBoundingClientRect();
- const x1=a.left+a.width/2-m.left,y1=a.top-m.top,cx=g.left+g.width/2-m.left,cy=g.top+g.height/2-m.top;const tgt=GL.randomFront(x1<cx);const x2=cx+tgt.x,y2=cy+tgt.y,mx=(x1+x2)/2,my=(y1+y2)/2;
+ const cx=g.left+g.width/2-m.left,cy=g.top+g.height/2-m.top,bx=a.left+a.width/2-m.left,by=a.top+a.height/2-m.top,dl=Math.hypot(bx-cx,by-cy)||1,ux=(bx-cx)/dl,uy=(by-cy)/dl;
+ const x1=bx-ux*a.width*.35,y1=by-uy*a.height*.35;const tgt=GL.toward?GL.toward(ux,uy):GL.randomFront(ux<0);const x2=cx+tgt.x,y2=cy+tgt.y;
+ const mx=(x1+x2)/2-uy*18,my=(y1+y2)/2+ux*18;   // leicht gebogen
  const ns='http://www.w3.org/2000/svg',id='g'+Math.random().toString(36).slice(2);
- svg.insertAdjacentHTML('beforeend',`<defs><linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a84ff" stop-opacity=".1"/><stop offset="1" stop-color="#7cc4ff"/></linearGradient><filter id="f${id}"><feGaussianBlur stdDeviation="3"/></filter></defs>`);
+ svg.insertAdjacentHTML('beforeend',`<defs><linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a84ff" stop-opacity=".15"/><stop offset="1" stop-color="#9ad6ff"/></linearGradient><filter id="f${id}"><feGaussianBlur stdDeviation="3"/></filter></defs>`);
  const d=`M${x1},${y1} Q${mx},${my} ${x2},${y2}`,p1=document.createElementNS(ns,'path'),p2=document.createElementNS(ns,'path'),dot=document.createElementNS(ns,'circle');
  [p1,p2].forEach((p,i)=>{p.setAttribute('d',d);p.setAttribute('fill','none');p.setAttribute('stroke',`url(#${id})`);p.setAttribute('stroke-width',i?2:7);p.setAttribute('stroke-linecap','round');if(!i)p.setAttribute('filter',`url(#f${id})`);svg.append(p)});
- dot.setAttribute('r',5);dot.setAttribute('fill','#dff1ff');svg.append(dot);const Lg=p2.getTotalLength();[p1,p2].forEach(p=>{p.style.strokeDasharray=Lg;p.style.strokeDashoffset=Lg});card.classList.add('flash');
- const t0=performance.now(),T=900;(function step(t){const k=Math.min(1,(t-t0)/T),e=1-Math.pow(1-k,3);[p1,p2].forEach(p=>p.style.strokeDashoffset=Lg*(1-e));const pt=p2.getPointAtLength(Lg*e);dot.setAttribute('cx',pt.x);dot.setAttribute('cy',pt.y);
+ dot.setAttribute('r',4.5);dot.setAttribute('fill','#e6f5ff');svg.append(dot);const Lg=p2.getTotalLength();[p1,p2].forEach(p=>{p.style.strokeDasharray=Lg;p.style.strokeDashoffset=Lg});card.classList.add('flash');
+ const t0=performance.now(),T=850;(function step(t){const k=Math.min(1,(t-t0)/T),e=1-Math.pow(1-k,3);[p1,p2].forEach(p=>p.style.strokeDashoffset=Lg*(1-e));const pt=p2.getPointAtLength(Lg*e);dot.setAttribute('cx',pt.x);dot.setAttribute('cy',pt.y);
   if(k<1)requestAnimationFrame(step);else{GL.hit(tgt);dot.remove();setTimeout(()=>card.classList.remove('flash'),500);const t1=performance.now();(function fade(t){const q=Math.min(1,(t-t1)/700);[p1,p2].forEach(p=>p.style.opacity=1-q);if(q<1)requestAnimationFrame(fade);else{p1.remove();p2.remove()}})(t1)}})(t0)}
+// ---- Trades gesetzt von (Snapshot-Feld trades/by_sum; Zeiten = Berliner Ortszeit des Bots)
+let BYF='';
+function renderBy(s){const T=s.trades||[],S=s.by_sum||[];const pct=v=>v==null?'–':Math.round(v*100)+' %';
+ $('#bysum').innerHTML=S.length?S.map(x=>`<button class="bycard${BYF===x.by?' sel':''}" data-by="${esc(x.by)}"><div class="bn">${esc(x.by)}</div><div class="bv ${cls(x.pnl)}">${sg(x.pnl)}</div><div class="bs">${x.n} Trades · Winrate ${pct(x.wr)}${x.open?` · ${x.open} offen`:''}</div></button>`).join(''):'';
+ $('#bysum').querySelectorAll('.bycard').forEach(b=>b.onclick=()=>{BYF=BYF===b.dataset.by?'':b.dataset.by;renderBy(SNAP)});
+ $('#byf').textContent=BYF?`Filter: ${BYF} (nochmal tippen zum Aufheben)`:'';
+ const L=T.filter(t=>!BYF||t.by===BYF);
+ $('#bylist').innerHTML=L.length?`<div class="tt">${L.map(t=>`<div class="tr"><span class="by">${esc(t.by)}</span><span class="sy"><b>${esc(t.sym)}</b> <i class="sd ${t.side==='buy'?'b':'s'}">${t.side==='buy'?'BUY':'SELL'}</i></span><span class="tm">${t.st==='open'?'<em>offen</em> · ':''}${tm(t.t)}</span><span class="lt">${esc(t.vol)} Lot</span><b class="pl ${cls(t.pnl)}">${sg(t.pnl)}</b></div>`).join('')}</div>`:'<div class="empty">Noch keine Trades</div>'}
+// ---- Einstellungen: Mitteilungs-Schalter (im Bot gespeichert: data/notify_prefs.json)
+let PREFS=null,PBUSY=false;
+function prefsUI(p){if(p&&!PBUSY&&(!PREFS||(p.t||0)>=(PREFS.t||0)))PREFS=p;const P=PREFS||{open:true,close:true,telegram:true,push:true};
+ document.querySelectorAll('.tg').forEach(x=>{x.checked=P[x.dataset.k]!==false;x.onchange=savePrefs});const b=$('#ptest');if(b&&!b.onclick)b.onclick=testMsg}
+async function savePrefs(){const b={};document.querySelectorAll('.tg').forEach(x=>b[x.dataset.k]=x.checked);PBUSY=true;$('#prefmsg').textContent='Speichere …';
+ try{const r=await api('api/prefs',{method:'POST',body:JSON.stringify(b)});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);PREFS=j.prefs;$('#prefmsg').textContent='Gespeichert ✓ – der Bot übernimmt es in ≤ 30 s.'}
+ catch(e){$('#prefmsg').textContent='Fehler: '+e.message}finally{PBUSY=false}}
+async function testMsg(){const b=$('#ptest');b.disabled=true;$('#prefmsg').textContent='Sende Test …';
+ try{const r=await api('api/notify/test',{method:'POST',body:'{}'});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);
+  $('#prefmsg').textContent=`Test gesendet ✓ · Push an ${j.push&&j.push.sent||0} Gerät(e) · Telegram ${j.telegram==='angefragt'?'folgt in ≤ 30 s':'aus'}`;loadEvents()}
+ catch(e){$('#prefmsg').textContent='Fehler: '+e.message}finally{b.disabled=false}}
 // ---- Trade-Mitteilungen (Web-Push wie beim Gold Bot) + Verlauf + Toast, solange die App offen ist
 const pushOK=()=>'serviceWorker'in navigator&&'PushManager'in window&&'Notification'in window,iOS=/iPhone|iPad|iPod/.test(navigator.userAgent),
  standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;let PINFO='';

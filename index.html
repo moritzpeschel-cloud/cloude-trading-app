@@ -24,16 +24,29 @@
   </div>
 </div>
 <div id="app" class="hidden">
-  <header><div class="title">Cloude Trading</div><div class="age" id="age">–</div></header>
+  <header><div class="title"><span class="lg">◆</span> Cloude Trading</div><div class="age" id="age">–</div></header>
   <div class="chips" id="chips"></div>
-  <div class="globebox"><canvas id="globe"></canvas></div>
+  <div class="ringwrap"><div class="ring" id="ring"><div class="globebox"><canvas id="globe"></canvas></div><div id="cards"></div></div></div>
+  <div class="agdet" id="agdet"></div>
   <div class="accbar" id="acc"></div>
-  <div class="cards" id="cards"></div>
-  <section><h2>Steuerung <small>per Telegram</small></h2><div class="ctl" id="ctl"></div><p class="hint">Die App ist nur lesend. Die Knöpfe öffnen den Telegram-Bot mit dem Befehl – dort auf „Starten“ tippen. Antworten gibt es nur in deinem Chat.</p></section>
-  <section><h2>Trade-Mitteilungen <small id="pstat">–</small></h2><div id="evs"></div><div class="pbtn" id="pbox"></div><p class="hint" id="pinfo"></p></section>
-  <section><h2>Offene Positionen</h2><div id="pos"></div></section>
-  <section><h2>Letzte Trades</h2><div id="hist"></div></section>
-  <section><h2>Journal <small>letzte Entscheidungen</small></h2><div id="dec"></div></section>
+  <nav class="tabs" id="tabs"><a href="#s-by">Trades gesetzt von</a><a href="#s-pos">Positionen</a><a href="#s-ctl">Steuerung</a><a href="#s-set">Einstellungen</a><a href="#s-dec">Journal</a></nav>
+  <div class="grid">
+  <section id="s-by" class="card wide"><h2>Trades gesetzt von <small>welcher Helfer / welche Strategie</small></h2><div class="bysum" id="bysum"></div><div class="filt" id="byf"></div><div id="bylist"></div></section>
+  <section id="s-pos" class="card"><h2>Offene Positionen</h2><div id="pos"></div><h2 class="h2b">Letzte Trades</h2><div id="hist"></div></section>
+  <section id="s-ctl" class="card"><h2>Steuerung <small>per Telegram</small></h2><div class="ctl" id="ctl"></div><p class="hint">Die App ist nur lesend. Die Knöpfe öffnen den Telegram-Bot mit dem Befehl – dort auf „Starten“ tippen. Antworten gibt es nur in deinem Chat.</p></section>
+  <section id="s-set" class="card"><h2>Einstellungen <small>Mitteilungen</small></h2>
+    <div class="set">
+      <div class="srow"><div><b>Web-Push auf diesem Gerät</b><div class="sub">Status: <span id="pstat">–</span></div></div><div class="pbtn" id="pbox"></div></div>
+      <p class="hint" id="pinfo"></p>
+      <label class="srow"><div><b>Bei Trade-Eröffnung</b><div class="sub">Symbol, BUY/SELL, Lot, Einstieg, SL/TP</div></div><input type="checkbox" class="tg" data-k="open"><i class="sw"></i></label>
+      <label class="srow"><div><b>Bei Trade-Schließung</b><div class="sub">🟢 Gewinn / 🔴 Verlust in €</div></div><input type="checkbox" class="tg" data-k="close"><i class="sw"></i></label>
+      <label class="srow"><div><b>Telegram</b><div class="sub">@moritz_goldtrading_bot</div></div><input type="checkbox" class="tg" data-k="telegram"><i class="sw"></i></label>
+      <label class="srow"><div><b>Web-Push (alle Geräte)</b><div class="sub">Mitteilungen in dieser App</div></div><input type="checkbox" class="tg" data-k="push"><i class="sw"></i></label>
+      <div class="srow"><div class="sub" id="prefmsg">Einstellungen werden im Bot gespeichert.</div><button class="ghost sm" id="ptest">Test-Mitteilung senden</button></div>
+    </div>
+    <h2 class="h2b">Letzte Mitteilungen</h2><div id="evs"></div></section>
+  <section id="s-dec" class="card wide"><h2>Journal <small>letzte Entscheidungen</small></h2><div id="dec"></div></section>
+  </div>
   <footer><span id="foot">–</span> · <a href="#" id="logout">Gerät abmelden</a></footer>
   <svg id="beams"></svg>
 </div>

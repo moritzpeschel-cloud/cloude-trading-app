@@ -9,6 +9,9 @@ const PORT = +process.env.PORT || 3000, API_TOKEN = process.env.API_TOKEN || '',
 const SECRET = process.env.SESSION_SECRET || crypto.createHash('sha256').update('ct|' + API_TOKEN + '|' + VIEW_PIN).digest('hex');
 const PUB = fs.existsSync(path.join(__dirname, 'public')) ? path.join(__dirname, 'public') : __dirname, MAX_BODY = 512 * 1024, SESSION_DAYS = 180;
 let SNAP = null, LAST = 0, PUSHES = 0;
+// Mitteilungs-Einstellungen (Bot hält die Wahrheit in data/notify_prefs.json; neuester Zeitstempel t gewinnt) + Test-Anfrage für Telegram
+const PKEYS = ['open', 'close', 'telegram', 'push']; let PREFS = null, TESTREQ = null;
+const cleanPrefs = (b, t) => { const o = { ...(PREFS || { open: true, close: true, telegram: true, push: true }) }; PKEYS.forEach(k => { if (typeof (b || {})[k] === 'boolean') o[k] = b[k]; }); o.t = t; return o; };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json',
   '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const SEC = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Strict-Transport-Security': 'max-age=31536000',
@@ -47,6 +50,18 @@ const server = http.createServer(async (req, res) => {
       if (!valid(t)) return send(res, 401, { error: 'Anmeldung nötig' });
       if (!SNAP) return send(res, 503, { error: 'Noch keine Daten vom Bot (Server gerade neu gestartet?)' });
       return send(res, 200, { ...SNAP, serverAgeS: Math.round((Date.now() - LAST) / 1000) });
+    }
+    if (p.startsWith('/api/prefs') || p === '/api/notify/test') {
+      const bt = String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), bot = !!API_TOKEN && eq(bt, API_TOKEN), ses = valid(bt);
+      if (p === '/api/prefs' && req.method === 'GET') { if (!bot && !ses) return send(res, 401, { error: 'Anmeldung nötig' }); return send(res, 200, { prefs: PREFS || (SNAP && SNAP.prefs) || null, test: bot ? TESTREQ : undefined }); }
+      if (p === '/api/prefs' && req.method === 'POST') { if (!ses) return send(res, 401, { error: 'Anmeldung nötig' }); PREFS = cleanPrefs(await body(req), Date.now()); return send(res, 200, { ok: true, prefs: PREFS }); }
+      if (p === '/api/prefs/restore' && req.method === 'POST') { if (!bot) return send(res, 401, { error: 'unauthorized' }); const b = (await body(req)).prefs || {};
+        if (+b.t > ((PREFS && PREFS.t) || 0)) PREFS = cleanPrefs(b, +b.t); return send(res, 200, { ok: true, prefs: PREFS }); }
+      if (p === '/api/prefs/ack' && req.method === 'POST') { if (!bot) return send(res, 401, { error: 'unauthorized' }); const b = await body(req); if (TESTREQ && b.id === TESTREQ.id) TESTREQ = null; return send(res, 200, { ok: true }); }
+      if (p === '/api/notify/test' && req.method === 'POST') { if (!ses) return send(res, 401, { error: 'Anmeldung nötig' });
+        const pr = PREFS || (SNAP && SNAP.prefs) || { push: true, telegram: true }; TESTREQ = pr.telegram !== false ? { id: 't' + Date.now(), t: Date.now() } : null;
+        const r = pr.push !== false ? await push.sendTest(API_TOKEN) : { sent: 0, skipped: 'push aus' }; return send(res, 200, { ok: true, push: r, telegram: TESTREQ ? 'angefragt' : 'aus' }); }
+      return send(res, 404, { error: 'not found' });
     }
     if (p.startsWith('/api/event') || p.startsWith('/api/push/')) {   // Trade-Mitteilungen (Web-Push) – siehe push.js
       const bearer = () => String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');

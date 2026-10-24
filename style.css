@@ -38,3 +38,74 @@ footer{margin-top:22px;font-size:11px;color:#7f93b8;text-align:center}footer a{c
 .tchip{font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:#3a2f00;color:#ffd60a;margin-left:6px}
 .toast{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:50;padding:12px 14px;border-radius:14px;background:#0d1220;border:1px solid #2a3245;box-shadow:0 8px 30px #000a}
 .toast.eup{border-color:#30d158}.toast.eup b{color:#30d158}.toast.edn{border-color:#ff453a}.toast.edn b{color:#ff453a}.toast[hidden]{display:none}
+
+/* ===== Redesign 24.10.2026: Helfer-Ring um den Globus, Einstellungen, Trades gesetzt von ===== */
+body{background:radial-gradient(1200px 700px at 50% -10%,#0b1d44 0%,#03050b 60%) fixed}
+#app{max-width:560px}
+.title .lg{color:#0a84ff;text-shadow:0 0 12px #0a84ff}
+.ringwrap{display:flex;justify-content:center;margin:6px -8px 0}
+.ring{position:relative;width:min(100%,560px);aspect-ratio:1/1}
+.ring .globebox{position:absolute;left:21%;top:21%;width:58%;height:58%;margin:0}
+.ring #globe{width:100%;height:100%}
+#cards{position:absolute;inset:0;display:block;margin:0}
+.ring .agent{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:70px;height:58px;padding:5px 3px;border-radius:18px;
+ background:rgba(12,22,44,.78);border:1px solid rgba(90,150,255,.25);color:#dbe8ff;font:inherit;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+ box-shadow:0 4px 18px #0006,inset 0 1px 0 #ffffff10;transition:box-shadow .25s,border-color .25s,transform .2s;-webkit-tap-highlight-color:transparent;z-index:3}
+.ring .agent:active{transform:scale(.96)}
+.ring .agent .ic{width:26px;height:26px;border-radius:9px;font-size:13px}
+.ring .agent .nm{font-size:10.5px;font-weight:600;white-space:nowrap;padding:0;max-width:66px;overflow:hidden;text-overflow:ellipsis;display:block;letter-spacing:.01em}
+.ring .agent .st{top:6px;right:7px;width:7px;height:7px}
+.ring .agent.sel{border-color:#7cc4ff;box-shadow:0 0 0 1px #7cc4ff,0 0 22px #0a84ff88}
+.ring .agent.working{border-color:#fbbf2488}
+.ring .agent.flash{border-color:#9ad6ff;box-shadow:0 0 0 1px #0a84ff,0 0 30px #0a84ffcc}
+.ring .agent.ki{flex-direction:row;width:auto;height:28px;padding:0 12px 0 6px;border-radius:99px;gap:6px}
+.ring .agent.ki .ic{width:18px;height:18px;font-size:10px;border-radius:50%}
+.ring .agent.ki .st{position:static;margin-left:2px}
+.agdet{display:none;gap:12px;align-items:flex-start;margin:4px 0 12px;padding:12px 14px;border-radius:16px;background:rgba(14,26,52,.85);border:1px solid rgba(124,196,255,.35);box-shadow:0 0 24px #0a84ff22;position:relative;z-index:2}
+.agdet.open{display:flex;animation:pop .2s ease-out}
+@keyframes pop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.agdet .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:17px;background:linear-gradient(135deg,#1e3a8a,#0a84ff);flex:none;box-shadow:0 0 14px #0a84ff55}
+.agdet .tx{flex:1;min-width:0}.agdet .nm{font-weight:650;font-size:14px}.agdet .jb{font-size:11.5px;color:#7f93b8}.agdet .rs{font-size:12.5px;color:#cfe0ff;margin-top:4px}
+.agdet .x{background:none;border:0;color:#7f93b8;font-size:22px;line-height:1;padding:0 2px;cursor:pointer}
+.pill{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:99px;background:#ffffff14;color:#9fb2d6;text-transform:uppercase;letter-spacing:.05em;vertical-align:2px}
+.pill.done{background:#0a84ff30;color:#6cb6ff}.pill.working{background:#f59e0b26;color:#fbbf24}.pill.error{background:#ff453a30;color:#ff7b72}
+.accbar{margin-top:0}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:14px -14px 0;padding:2px 14px;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs a{flex:none;padding:7px 12px;border-radius:99px;background:rgba(18,28,52,.6);border:1px solid rgba(80,140,255,.2);color:#a9c3ef;text-decoration:none;font-size:12px;font-weight:600}
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-top:14px}
+section.card{margin:0;padding:14px;border-radius:18px;background:linear-gradient(180deg,rgba(16,26,50,.72),rgba(8,14,30,.72));border:1px solid rgba(80,140,255,.16);box-shadow:0 10px 30px #0005;scroll-margin-top:12px}
+.h2b{margin-top:16px}
+/* Trades gesetzt von */
+.bysum{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:8px}
+.bycard{text-align:left;padding:10px 12px;border-radius:14px;background:rgba(10,20,42,.85);border:1px solid rgba(80,140,255,.2);color:#dbe8ff;font:inherit;cursor:pointer}
+.bycard.sel{border-color:#7cc4ff;box-shadow:0 0 16px #0a84ff55}.bycard .bn{font-size:12px;font-weight:650;color:#9fc8ff}.bycard .bv{font-size:17px;font-weight:700;margin-top:2px}.bycard .bs{font-size:10.5px;color:#7f93b8;margin-top:1px}
+.filt{font-size:11px;color:#7cc4ff;margin:0 2px 6px;min-height:0}
+.tt{display:flex;flex-direction:column;gap:5px}
+.tr{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.3fr) auto;grid-template-areas:"by sy pl" "tm tm lt";gap:2px 8px;align-items:center;padding:8px 11px;border-radius:12px;background:rgba(18,28,52,.5);border:1px solid rgba(80,140,255,.12);font-size:12.5px}
+.tr .by{grid-area:by;font-weight:650;color:#9fc8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tr .sy{grid-area:sy;white-space:nowrap}.tr .pl{grid-area:pl;text-align:right;white-space:nowrap}
+.tr .tm{grid-area:tm;font-size:11px;color:#8ea2c6}.tr .tm em{color:#fbbf24;font-style:normal}.tr .lt{grid-area:lt;font-size:11px;color:#8ea2c6;text-align:right}
+.sd{font-style:normal;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:4px}.sd.b{background:#30d15822;color:#7ee2a0}.sd.s{background:#ff453a22;color:#ff8a80}
+.empty{padding:22px 10px;text-align:center;color:#7f93b8;border:1px dashed rgba(80,140,255,.25);border-radius:14px;font-size:13px}
+/* Einstellungen */
+.set{display:flex;flex-direction:column;gap:2px}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 2px;border-bottom:1px solid rgba(80,140,255,.1);cursor:pointer}
+.srow:last-child{border-bottom:0}.srow b{font-size:13.5px;font-weight:600}.srow .sub{font-size:11px;color:#7f93b8;margin-top:1px}
+.srow input{position:absolute;opacity:0;pointer-events:none}
+.sw{flex:none;width:46px;height:28px;border-radius:99px;background:#2a3245;position:relative;transition:background .2s}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px #0007;transition:transform .2s}
+.srow input:checked+.sw{background:#0a84ff;box-shadow:0 0 12px #0a84ff66}.srow input:checked+.sw::after{transform:translateX(18px)}
+.srow input:focus-visible+.sw{outline:2px solid #7cc4ff;outline-offset:2px}
+.pbtn{flex:none}.pbtn button{width:auto;margin:0;padding:9px 14px;font-size:13px}
+button.sm,.ghost.sm{flex:none;padding:9px 14px;border-radius:12px;background:transparent;border:1px solid #2f4a7a;color:#9fc8ff;font:600 13px system-ui;cursor:pointer}
+button.sm:disabled{opacity:.5}
+#evs .row{margin-bottom:5px}
+/* Desktop / Tablet */
+@media (min-width:900px){
+ #app{max-width:1180px;padding:0 28px 40px}
+ .ring{width:min(100%,640px)}
+ .ring .agent{width:96px;height:72px;border-radius:20px}.ring .agent .ic{width:32px;height:32px;font-size:16px;border-radius:10px}.ring .agent .nm{font-size:12px;max-width:90px}
+ .ring .agent.ki{height:32px;width:auto}
+ .agdet,.accbar{max-width:760px;margin-left:auto;margin-right:auto}.accbar{grid-template-columns:repeat(6,1fr)}
+ .tabs{justify-content:center;margin:16px 0 0}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr))}.card.wide{grid-column:1/-1}
+}
