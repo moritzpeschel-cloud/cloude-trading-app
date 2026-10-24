@@ -3,9 +3,11 @@
 // Das Handy meldet sich mit der View-PIN an: POST /api/login {pin} -> Sitzungs-Token (HMAC, 180 Tage) -> GET /api/state.
 // Trade-Mitteilungen (Web-Push, push.js): POST /api/event (Bearer API_TOKEN) -> Push an alle Abos; /api/events, /api/push/* (Sitzung).
 // ENV: API_TOKEN (Push-Token), VIEW_PIN (Anzeige-PIN), optional SESSION_SECRET, VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY, PORT.
+// Ausfall-Alarm (watchdog.js): kein /api/update > STALE_MIN (5) Min. -> Web-Push + optional Telegram (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID).
 'use strict';
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto'), push = require('./push');
 const PORT = +process.env.PORT || 3000, API_TOKEN = process.env.API_TOKEN || '', VIEW_PIN = process.env.VIEW_PIN || '';
+const watchdog = require('./watchdog');
 const SECRET = process.env.SESSION_SECRET || crypto.createHash('sha256').update('ct|' + API_TOKEN + '|' + VIEW_PIN).digest('hex');
 const PUB = fs.existsSync(path.join(__dirname, 'public')) ? path.join(__dirname, 'public') : __dirname, MAX_BODY = 512 * 1024, SESSION_DAYS = 180;
 let SNAP = null, LAST = 0, PUSHES = 0;
@@ -30,13 +32,18 @@ function body(req) { return new Promise((ok, no) => { let n = 0, b = []; req.on(
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname;
   try {
-    if (p === '/healthz') return send(res, 200, { ok: true, hasData: !!SNAP, ageS: LAST ? Math.round((Date.now() - LAST) / 1000) : null });
+    if (p === '/healthz') return send(res, 200, { ok: true, hasData: !!SNAP, ageS: LAST ? Math.round((Date.now() - LAST) / 1000) : null, alarm: watchdog.state() });
+    if (p === '/api/alarm/test' && req.method === 'POST') {   // 🧪 TEST der Ausfall-Meldungen (Bot-Token oder Sitzung)
+      const bt = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      if (!((API_TOKEN && eq(bt, API_TOKEN)) || valid(bt))) return send(res, 401, { error: 'unauthorized' });
+      return send(res, 200, await watchdog.test());
+    }
     if (p === '/api/update' && req.method === 'POST') {
       const tok = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       if (!API_TOKEN) return send(res, 503, { error: 'API_TOKEN fehlt auf dem Server' });
       if (!eq(tok, API_TOKEN)) return send(res, 401, { error: 'unauthorized' });
       const b = await body(req); if (!b || typeof b !== 'object' || typeof b.gen !== 'number') return send(res, 400, { error: 'Snapshot ungültig' });
-      SNAP = b; LAST = Date.now(); PUSHES++; return send(res, 200, { ok: true });
+      SNAP = b; LAST = Date.now(); PUSHES++; watchdog.seen(LAST); return send(res, 200, { ok: true });
     }
     if (p === '/api/login' && req.method === 'POST') {
       const ip = ipOf(req); if (!VIEW_PIN) return send(res, 503, { error: 'VIEW_PIN fehlt auf dem Server' });
@@ -76,4 +83,5 @@ const server = http.createServer(async (req, res) => {
     fs.createReadStream(f).pipe(res);
   } catch (e) { send(res, 400, { error: 'Anfrage ungültig' }); }
 });
+watchdog.start({ token: API_TOKEN, push });
 server.listen(PORT, () => console.log(`Cloude Trading App auf Port ${PORT} · Token ${API_TOKEN ? 'gesetzt' : 'FEHLT'} · PIN ${VIEW_PIN ? 'gesetzt' : 'FEHLT'}`));

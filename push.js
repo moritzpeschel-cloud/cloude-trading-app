@@ -72,10 +72,10 @@ load();
 
 const str = (v, n) => String(v == null ? '' : v).slice(0, n);
 function cleanEvent(b) {
-  const kind = ['open', 'close', 'test'].includes(b.kind) ? b.kind : null; if (!kind) throw new Error('kind fehlt');
+  const kind = ['open', 'close', 'test', 'alert', 'report'].includes(b.kind) ? b.kind : null; if (!kind) throw new Error('kind fehlt');
   const id = str(b.id, 80); if (!id) throw new Error('id fehlt');
   const pnl = typeof b.pnl === 'number' && isFinite(b.pnl) ? Math.round(b.pnl * 100) / 100 : null;
-  const color = pnl != null ? (pnl > 0.004 ? 'green' : pnl < -0.004 ? 'red' : 'neutral') : 'neutral';
+  const color = pnl != null ? (pnl > 0.004 ? 'green' : pnl < -0.004 ? 'red' : 'neutral') : (['green', 'red'].includes(b.color) ? b.color : 'neutral');
   return { id, kind, title: str(b.title, 120), body: str(b.body, 300), pnl, color, symbol: str(b.symbol, 20), side: str(b.side, 8),
     test: !!b.test || kind === 'test', t: typeof b.t === 'number' ? b.t : Math.floor(Date.now() / 1000) };
 }
@@ -132,4 +132,9 @@ async function sendTest(token) {   // Test-Mitteilung aus den Einstellungen (kei
   events.push(ev); events = events.slice(-MAX_EVENTS); fs.writeFile(EVENTS_FILE, JSON.stringify(events), () => {});
   return { subs: subs.length, ...(await sendAll(ev, token)) };
 }
-module.exports = { handle, sendTest, deriveVapid, encrypt, vapidAuth, _reset() { subs = []; events = []; seen = new Set(); VAPID = null; }, _subs: () => subs };
+async function sendAlert(token, b) {   // Server-eigene Alarme (Bot offline/online) – ohne Bot, direkt an alle Abos
+  const ev = cleanEvent({ kind: 'alert', ...b }); if (seen.has(ev.id)) return { dup: true }; seen.add(ev.id);
+  events.push(ev); events = events.slice(-MAX_EVENTS); fs.writeFile(EVENTS_FILE, JSON.stringify(events), () => {});
+  return { subs: subs.length, ...(await sendAll(ev, token)) };
+}
+module.exports = { handle, sendTest, sendAlert, deriveVapid, encrypt, vapidAuth, _reset() { subs = []; events = []; seen = new Set(); VAPID = null; }, _subs: () => subs };

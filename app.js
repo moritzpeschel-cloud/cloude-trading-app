@@ -37,7 +37,7 @@ function render(s,offline){SNAP=s;$('#app').classList.remove('hidden');$('#lock'
    +`<button class="agent ki" id="ag-claude" data-k="claude"><span class="ic">✦</span><span class="nm">KI-Prüfer</span><span class="st" id="st-claude"></span></button>`;
   $('#cards').querySelectorAll('.agent').forEach(b=>b.onclick=()=>{OPEN=OPEN===b.dataset.k?null:b.dataset.k;agDetail()});layoutRing();addEventListener('resize',layoutRing)}
  for(const [k] of ALL){const g=s.agents[k]||{};const st=$('#st-'+k);if(!st)continue;st.className='st '+(g.s||'');$('#ag-'+k).classList.toggle('working',g.s==='working')}
- agDetail();renderBy(s);prefsUI(s.prefs);
+ agDetail();renderBy(s);renderWeek(s);prefsUI(s.prefs);
  const B='https://t.me/'+BOT+'?start=',L=(cmd,t,k)=>`<a class="${k||''}" href="${B+cmd}" data-c="${cmd}">${t}</a>`;
  $('#ctl').innerHTML=L('status','📊 Status')+L('notaus','🛑 Not-Aus','red')+L('weiter','✅ Weiter','green')+L('auto_an','🤖 Auto an','green')+L('auto_aus','⏸ Auto aus','red')+L('notaus_alles','⛔ Alles schließen','red');
  $('#ctl').querySelectorAll('a').forEach(x=>x.onclick=e=>{const m={notaus_alles:'Not-Aus und ALLE Positionen schließen?',notaus:'Not-Aus einschalten?',weiter:'Not-Aus ausschalten?',auto_aus:'Auto-Trading ausschalten?',auto_an:'Auto-Trading einschalten?'}[x.dataset.c];if(m&&!confirm(m+' (Telegram öffnet sich)'))e.preventDefault()});
@@ -79,6 +79,14 @@ function renderBy(s){const T=s.trades||[],S=s.by_sum||[];const pct=v=>v==null?'�
  $('#byf').textContent=BYF?`Filter: ${BYF} (nochmal tippen zum Aufheben)`:'';
  const L=T.filter(t=>!BYF||t.by===BYF);
  $('#bylist').innerHTML=L.length?`<div class="tt">${L.map(t=>`<div class="tr"><span class="by">${esc(t.by)}</span><span class="sy"><b>${esc(t.sym)}</b> <i class="sd ${t.side==='buy'?'b':'s'}">${t.side==='buy'?'BUY':'SELL'}</i></span><span class="tm">${t.st==='open'?'<em>offen</em> · ':''}${tm(t.t)}</span><span class="lt">${esc(t.vol)} Lot</span><b class="pl ${cls(t.pnl)}">${sg(t.pnl)}</b></div>`).join('')}</div>`:'<div class="empty">Noch keine Trades</div>'}
+// ---- Wochen-Report (Snapshot-Feld week: Mo–So Berlin, je Helfer/Strategie; halt = Tageslimit heute erreicht)
+function renderWeek(s){const w=s.week,el=$('#wk');if(!el)return;const pct=v=>v==null?'–':Math.round(v*100)+' %',d=x=>x?x.slice(8,10)+'.'+x.slice(5,7)+'.':'';
+ if(!w){el.innerHTML='<div class="empty">Noch kein Wochen-Report (Bot-Update ausstehend)</div>';return}
+ $('#wkr').textContent=`KW ${w.kw} · ${d(w.from)}–${d(w.to)} · Telegram So 20:00 und /woche`;
+ const bt=t=>t?`${esc(t.sym)} <b class="${cls(t.pnl)}">${sg(t.pnl)}</b>`:'–';
+ el.innerHTML=(s.halt?'<div class="wkhalt">🛑 Tageslimit heute erreicht – alle Trades geschlossen, Handel bis morgen gesperrt</div>':'')+
+ `<div class="wktot"><div><span>Gesamt</span><b class="${cls(w.pnl)}">${sg(w.pnl)}</b></div><div><span>Trades</span><b>${w.trades}</b></div><div><span>Trefferquote</span><b>${pct(w.wr)}</b></div></div>`+
+ (w.by&&w.by.length?`<div class="bysum">${w.by.map(x=>`<div class="bycard"><div class="bn">${esc(x.by)}</div><div class="bv ${cls(x.pnl)}">${sg(x.pnl)}</div><div class="bs">${x.n} Trades · Winrate ${pct(x.wr)}</div><div class="bs">Bester: ${bt(x.best)}</div><div class="bs">Schlechtester: ${bt(x.worst)}</div></div>`).join('')}</div>`:'<div class="empty">Diese Woche noch keine geschlossenen Trades</div>')}
 // ---- Einstellungen: Mitteilungs-Schalter (im Bot gespeichert: data/notify_prefs.json)
 let PREFS=null,PBUSY=false;
 function prefsUI(p){if(p&&!PBUSY&&(!PREFS||(p.t||0)>=(PREFS.t||0)))PREFS=p;const P=PREFS||{open:true,close:true,telegram:true,push:true};
