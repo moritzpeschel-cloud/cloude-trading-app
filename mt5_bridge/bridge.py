@@ -18,12 +18,30 @@ Optional: MT5_PATH (terminal64.exe), MT5_LOGIN/MT5_PASSWORD/MT5_SERVER (sonst wi
 import json, math, os, re, sys, time, urllib.request, urllib.error
 
 try:
-    import MetaTrader5 as mt5
+    import MetaTrader5 as mt5            # Windows: offizielles Paket
 except ImportError:
-    sys.exit("MetaTrader5 fehlt:  pip install MetaTrader5   (läuft nur unter Windows mit installiertem MT5-Terminal)")
+    try:                                  # Linux-Server mit MT5 unter Wine: mt5linux (rpyc-Server in der Wine-Python)
+        from mt5linux import MetaTrader5 as _MT5Linux
+        mt5 = _MT5Linux(host=os.environ.get("MT5_LINUX_HOST", "localhost"), port=int(os.environ.get("MT5_LINUX_PORT", "18812")))
+    except Exception as _e:
+        sys.exit("MetaTrader5 fehlt.\n  Windows:  pip install MetaTrader5\n  Linux mit Wine-MT5:  pip install mt5linux  und in der Wine-Python  python -m mt5linux  starten\n(" + str(_e) + ")")
 
-URL = os.environ.get("CT_URL", "").rstrip("/")
-TOKEN = os.environ.get("CT_TOKEN", "")
+def _box_env(path=os.environ.get("BOX_ENV", "/workspace/trader-dashboard/.env")):
+    """Auf der Box: CLOUDE_APP_URL / CLOUDE_PUSH_TOKEN aus der .env des alten Bots lesen."""
+    out = {}
+    try:
+        for line in open(path, encoding="utf-8"):
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.split("=", 1)
+                out[k.strip()] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return out
+
+
+_BOX = _box_env()
+URL = (os.environ.get("CT_URL") or _BOX.get("CLOUDE_APP_URL", "")).rstrip("/")
+TOKEN = os.environ.get("CT_TOKEN") or _BOX.get("CLOUDE_PUSH_TOKEN", "")
 INTERVAL = float(os.environ.get("CT_INTERVAL", "3"))
 ONCE = "--once" in sys.argv
 
@@ -184,8 +202,7 @@ def report(magic, results):
              "sl": o.sl, "tp": o.tp, "magic": o.magic, "comment": o.comment} for o in (mt5.orders_get() or []) if REV.get(o.symbol)]
     # geschlossene Positionen der letzten 7 Tage (Magic über den Eröffnungs-Deal)
     now = time.time()
-    from datetime import datetime
-    deals = mt5.history_deals_get(datetime.fromtimestamp(now - 7 * 86400), datetime.fromtimestamp(now + 86400)) or []
+    deals = mt5.history_deals_get(int(now - 7 * 86400), int(now + 86400)) or []
     by = {}
     for d in deals:
         by.setdefault(d.position_id, []).append(d)
@@ -208,7 +225,7 @@ def report(magic, results):
     return {"account": acc, "positions": pos, "orders": ords, "closed": closed, "prices": prices, "results": results}
 
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 
 def hint(code):
