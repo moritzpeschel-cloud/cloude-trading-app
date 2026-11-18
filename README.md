@@ -35,6 +35,11 @@ Optional prüft **Claude als KI-Prüfer** (`ANTHROPIC_API_KEY`, Schalter im Dash
 * **Trades** – Kontoverlauf, Statistik, offene/geschlossene Trades, Journal mit Begründung jeder Entscheidung.
 * **Mehr** – Auto-Trading, Not-Aus, KI-Prüfer, Risiko-Regeln (Schieberegler), Kurs-Alarme, Web-Push, MT5-Box-Bot, Konto-Reset.
 
+## Zwei Dashboards
+* `/` – **Trader-Skill-Dashboard** (dieser Bot, 11 Helfer).
+* `/mp/` – **MP Trading Dashboard v2.1** (Liquid-Glass-Design für den MT5-Bot auf der Box: Übersicht, Trades mit CSV-Export, Helfer, Analyse mit P/L-Kalender, Privatmodus).
+  Beide nutzen dieselbe Anmeldung (PIN) und dieselben Daten-Endpunkte; Link unter **Mehr → MT5-Bot (Box)**.
+
 ## Kursdaten
 Live-Kurse von Yahoo Finance (ohne Key). Ist die Quelle nicht erreichbar, läuft ein realistischer **Simulator** – das Dashboard zeigt dann deutlich „SIMULIERTE KURSE“. `DATA_SOURCE=live|sim` erzwingt eine Quelle.
 

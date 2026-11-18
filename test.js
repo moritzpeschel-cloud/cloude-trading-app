@@ -83,6 +83,9 @@ const j = (p, o = {}) => fetch(B + p, { ...o, headers: { 'Content-Type': 'applic
     const csp = (await fetch(B + '/')).headers.get('content-security-policy'); assert.ok(csp.includes("script-src 'self'"));
     for (const f of ['/app.js', '/charts.js', '/robots.js', '/style.css', '/sw.js', '/icons/icon-192.png']) assert.equal((await fetch(B + f)).status, 200, f);
     assert.ok(!(await (await fetch(B + '/bot/engine.js')).text()).includes('module.exports'), 'Server-Code nie ausliefern');
+    const mp = await (await fetch(B + '/mp/')).text(); assert.ok(mp.includes('MP Trading') && mp.includes('id="bpriv"'), 'MP-Dashboard (eigene index.html) unter /mp/');
+    assert.equal((await fetch(B + '/mp/api/state', { headers: S })).status, 200, '/mp/api -> /api');
+    assert.equal((await fetch(B + '/mp/icons/icon-192.png')).status, 200);
     console.log('cloud_app: alle Tests bestanden');
   } catch (e) { console.error('FEHLER', e.message); process.exitCode = 1; } finally { srv.kill(); PS.close(); }
 })();

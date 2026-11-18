@@ -34,7 +34,10 @@ const fail = ip => { FAILS.get(ip).push(Date.now()); GFAIL.push(Date.now()); };
 function body(req) { return new Promise((ok, no) => { let n = 0, b = []; req.on('data', c => { n += c.length; if (n > MAX_BODY) { no(new Error('zu groß')); req.destroy(); } else b.push(c); });
   req.on('end', () => { try { ok(JSON.parse(Buffer.concat(b).toString() || '{}')); } catch (e) { no(e); } }); req.on('error', no); }); }
 const server = http.createServer(async (req, res) => {
-  const u = new URL(req.url, 'http://x'), p = u.pathname;
+  const u = new URL(req.url, 'http://x'); let p = u.pathname;
+  // MP-Trading-Dashboard v2.1 liegt unter /mp/ – seine relativen API-/Icon-Pfade auf die gemeinsamen umbiegen
+  if (p.startsWith('/mp/api/') || p === '/mp/healthz' || p.startsWith('/mp/icons/')) p = p.slice(3);
+  if (p === '/mp') { res.writeHead(301, { Location: '/mp/', ...SEC }); return res.end(); }
   try {
     if (p === '/healthz') return send(res, 200, { ok: true, engine: engine ? { cycle: engine._S.cycle, ageS: engine._S.last ? Math.round((Date.now() - engine._S.last) / 1000) : null } : 'off', hasData: !!SNAP, ageS: LAST ? Math.round((Date.now() - LAST) / 1000) : null, alarm: watchdog.state() });
     if (p === '/api/alarm/test' && req.method === 'POST') {   // 🧪 TEST der Ausfall-Meldungen (Bot-Token oder Sitzung)
@@ -118,6 +121,7 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith('/api/')) return send(res, 404, { error: 'not found' });
     let f = path.normalize(path.join(PUB, p === '/' ? 'index.html' : decodeURIComponent(p)));
     if (PUB === __dirname) { const flat = path.basename(f); f = /^(index\.html|app\.js|globe\.js|style\.css|sw\.js|manifest\.webmanifest|[a-z0-9-]+\.png)$/.test(flat) ? path.join(PUB, flat) : path.join(PUB, 'index.html'); }
+    if (f.startsWith(PUB + path.sep) && fs.existsSync(f) && fs.statSync(f).isDirectory() && fs.existsSync(path.join(f, 'index.html'))) f = path.join(f, 'index.html');   // z. B. /mp/
     if (!f.startsWith(PUB + path.sep) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(PUB, 'index.html');
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream', 'Cache-Control': /\.(html|js|css|webmanifest)$/.test(f) ? 'no-cache' : 'public, max-age=3600', ...SEC });
     fs.createReadStream(f).pipe(res);
