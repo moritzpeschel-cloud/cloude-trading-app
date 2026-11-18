@@ -4,8 +4,8 @@ Kleine Web-App (PWA) für das iPhone: Globus mit 12 Helfern, Kontoleiste, offene
 letzte Trades, Journal, Status. **Nur lesend** – Steuerung läuft über den Telegram-Bot.
 Ohne Abhängigkeiten (Node ≥ 18), kostenlos auf Render (Free Plan) – genau wie der Gold Bot.
 
-## Design v2 (MP Trading Dashboard)
-Untere Tab-Leiste mit 5 Ansichten, Hell/Dunkel/Auto, Glas-Look:
+## Design v2.1 (MP Trading Dashboard, Apple-/„Liquid Glass“-Optik)
+Schwebende Glas-Tab-Leiste mit 5 Ansichten, Milchglas-Karten über farbigem Hintergrund, iOS-Schalter/-Segmente, Hell/Dunkel/Auto:
 - **Übersicht** – Equity mit Zähl-Animation, Heute/Woche/Monat, interaktiver Chart (P/L kumuliert oder Equity-Verlauf, 1T/1W/1M/Alle, Finger-Scrubbing),
   Status-Chips, Trefferquote-Ring, Profit-Faktor, **Tagesziel** mit Fortschrittsring, Gewinn-/Verlust-Serie, offene Positionen mit **R:R**.
 - **Trades** – Suche, Filter (Offen/Gewinn/Verlust), Strategie-Karten, nach Tagen gruppiert mit Tagessumme, Detail-Sheet, **CSV-Export**.

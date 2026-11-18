@@ -70,7 +70,7 @@ $$('#tabbar button').forEach(b=>b.onclick=()=>{tap();go(b.dataset.v)});
 document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g){tap();go(g.dataset.go)}});
 const mq=matchMedia('(prefers-color-scheme: light)');
 function applyTheme(){const t=SET.theme==='auto'?(mq.matches?'light':'dark'):SET.theme;document.documentElement.dataset.theme=t;
- const m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='light'?'#f2f3f7':'#07080c';segOn('#theme',SET.theme)}
+ const m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='light'?'#f2f2f7':'#000000';segOn('#theme',SET.theme)}
 mq.addEventListener&&mq.addEventListener('change',applyTheme);
 function applyPriv(){document.body.classList.toggle('priv',!!SET.priv);const u=$('#bpriv use');if(u)u.setAttribute('href',SET.priv?'#i-eyeoff':'#i-eye');$$('.ltg').forEach(x=>x.checked=!!SET[x.dataset.k])}
 $('#bpriv').onclick=()=>{tap();SET.priv=!SET.priv;saveSet();applyPriv()};
@@ -153,7 +153,7 @@ function renderChart(){const el=$('#chart'),tip=$('#ctip');if(!el||!SNAP)return;
  const X=x=>pad+(x-x0)/((x1-x0)||1)*(W-2*pad),Y=y=>pad+14+(1-(y-y0)/(y1-y0))*(H-2*pad-14);
  const up=P[P.length-1].y>=(SET.ctype==='pl'?0:P[0].y),col=up?'var(--up)':'var(--dn)',gid='cg'+(up?'u':'d');
  const d=P.map((p,i)=>(i?'L':'M')+X(p.x).toFixed(1)+','+Y(p.y).toFixed(1)).join('');
- el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${up?'#22c55e':'#f43f5e'}" stop-opacity=".35"/><stop offset="1" stop-color="${up?'#22c55e':'#f43f5e'}" stop-opacity="0"/></linearGradient></defs>
+ el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${up?'#30d158':'#ff453a'}" stop-opacity=".35"/><stop offset="1" stop-color="${up?'#30d158':'#ff453a'}" stop-opacity="0"/></linearGradient></defs>
   ${SET.ctype==='pl'?`<line class="zr" x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}"/>`:''}<path d="${d}L${X(x1)},${H}L${X(x0)},${H}Z" fill="url(#${gid})"/><path class="ln" d="${d}" stroke="${col}"/>
   <line class="cur" id="ccur" y1="0" y2="${H}" x1="-9" x2="-9"/><circle class="dot" id="cdot" r="5" fill="${col}" cx="${X(P[P.length-1].x)}" cy="${Y(P[P.length-1].y)}"/></svg>`;
  const def=()=>{const l=P[P.length-1],f=P[0],dv=l.y-f.y;tip.innerHTML=SET.ctype==='pl'?`Realisiert <b class="m ${cls(l.y)}">${sg(l.y)}</b> · ${P.length-1} Trades`:`<b class="m">${eur(l.y)}</b> <span class="m ${cls(dv)}">${sg(dv)}</span> im Zeitraum`;
@@ -214,7 +214,7 @@ function beam(card){const svg=$('#beams'),cv=$('#globe');if(!svg||!cv||!GL)retur
  const cx=g.left+g.width/2-m.left,cy=g.top+g.height/2-m.top,bx=a.left+a.width/2-m.left,by=a.top+a.height/2-m.top,dl=Math.hypot(bx-cx,by-cy)||1,ux=(bx-cx)/dl,uy=(by-cy)/dl;
  const x1=bx-ux*a.width*.35,y1=by-uy*a.height*.35,tgt=GL.toward(ux,uy),x2=cx+tgt.x,y2=cy+tgt.y,mx=(x1+x2)/2-uy*18,my=(y1+y2)/2+ux*18;
  const ns='http://www.w3.org/2000/svg',id='g'+Math.random().toString(36).slice(2);
- svg.insertAdjacentHTML('beforeend',`<defs><linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#8b5cf6" stop-opacity=".2"/><stop offset="1" stop-color="#9ae8ff"/></linearGradient><filter id="f${id}"><feGaussianBlur stdDeviation="3"/></filter></defs>`);
+ svg.insertAdjacentHTML('beforeend',`<defs><linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a84ff" stop-opacity=".2"/><stop offset="1" stop-color="#9ae8ff"/></linearGradient><filter id="f${id}"><feGaussianBlur stdDeviation="3"/></filter></defs>`);
  const d=`M${x1},${y1} Q${mx},${my} ${x2},${y2}`,p1=document.createElementNS(ns,'path'),p2=document.createElementNS(ns,'path'),dot=document.createElementNS(ns,'circle');
  [p1,p2].forEach((p,i)=>{p.setAttribute('d',d);p.setAttribute('fill','none');p.setAttribute('stroke',`url(#${id})`);p.setAttribute('stroke-width',i?2:7);p.setAttribute('stroke-linecap','round');if(!i)p.setAttribute('filter',`url(#f${id})`);svg.append(p)});
  dot.setAttribute('r',4.5);dot.setAttribute('fill','#e6f5ff');svg.append(dot);const Lg=p2.getTotalLength();[p1,p2].forEach(p=>{p.style.strokeDasharray=Lg;p.style.strokeDashoffset=Lg});card.classList.add('flash');
@@ -231,7 +231,7 @@ function renderStats(s){renderWeek(s);const C=closed(s),S=stats(C);
  const mxp=Math.max(1,...days.map(d=>Math.abs((byDay[dk(d)]||{}).p||0)));
  $('#cal').innerHTML=`<div class="cal">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(w=>`<div class="wd">${w}</div>`).join('')}${days.map(d=>{const k=dk(d),v=byDay[k];
   return`<button class="cd${d>today?' fut':''}${k===dk(today)?' today':''}${k===CALSEL?' sel':''}${v&&v.p?' hv':''}" data-k="${k}" data-v="${v?v.p:''}">${d.getDate()}</button>`}).join('')}</div>`;
- $$('#cal .cd').forEach(b=>{const v=+b.dataset.v;if(b.dataset.v!==''&&v){const a=.25+.75*Math.min(1,Math.abs(v)/mxp);b.style.background=v>0?`rgba(34,197,94,${a})`:`rgba(244,63,94,${a})`}
+ $$('#cal .cd').forEach(b=>{const v=+b.dataset.v;if(b.dataset.v!==''&&v){const a=.25+.75*Math.min(1,Math.abs(v)/mxp);b.style.background=v>0?`rgba(48,209,88,${a})`:`rgba(255,69,58,${a})`}
   b.onclick=()=>{tap();CALSEL=b.dataset.k;$$('#cal .cd').forEach(x=>x.classList.toggle('sel',x===b));calInfo(byDay)}});calInfo(byDay);
  // Kennzahlen
  const c=(l,v,k,sub)=>`<div class="st2"><span>${l}</span><b class="${k||''}">${v}</b>${sub?`<small>${sub}</small>`:''}</div>`;
