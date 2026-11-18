@@ -82,11 +82,14 @@ const server = http.createServer(async (req, res) => {
       const r = await push.handle(p, req, res, { send, body, token: API_TOKEN, bearerOk: () => !!API_TOKEN && eq(bearer(), API_TOKEN), sessionOk: () => valid(bearer()) });
       if (r !== false) return;
     }
-    if (p === '/api/mt5/poll' || p === '/api/mt5/sync') {   // MT5-Brücke (mt5_bridge/bridge.py) – nur mit Bot-Token
+    if (p.startsWith('/api/mt5/')) {   // MT5-Brücke (mt5_bridge/bridge.py) – nur mit Bot-Token
       const bt = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-      if (!API_TOKEN || !eq(bt, API_TOKEN)) return send(res, 401, { error: 'unauthorized' });
+      if (!API_TOKEN) return send(res, 503, { error: 'API_TOKEN fehlt auf dem Server' });
+      if (!eq(bt, API_TOKEN)) { if (engine) engine.mt5Note({ authFail: Date.now() }); return send(res, 401, { error: 'CT_TOKEN falsch – muss genau dem API_TOKEN in Render entsprechen' }); }
       if (!engine) return send(res, 503, { error: 'Engine ist aus' });
-      if (p === '/api/mt5/poll') return send(res, 200, engine.mt5Poll());
+      if (p === '/api/mt5/poll') { engine.mt5Note({ poll: Date.now() }); return send(res, 200, engine.mt5Poll()); }
+      if (p === '/api/mt5/hello' && req.method === 'POST') { const b = await body(req); engine.mt5Note({ hello: Date.now(), bridgeError: String(b.error || '').slice(0, 200) || null, bridgeVersion: String(b.version || '').slice(0, 20) }); return send(res, 200, { ok: true }); }
+      if (p !== '/api/mt5/sync') return send(res, 404, { error: 'not found' });
       if (req.method !== 'POST') return send(res, 405, { error: 'POST erwartet' });
       return send(res, 200, engine.mt5Sync(await body(req)));
     }

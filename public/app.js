@@ -50,7 +50,7 @@ function pills(err) {
   if (!SK) return; const e = SK.engine, d = SK.data, age = (Date.now() - e.last) / 1000;
   const p = (c, t) => `<span class="pill ${c}"><i></i>${esc(t)}</span>`;
   $('#pills').innerHTML = (d.source === 'sim' ? '<span class="pill sim">SIMULIERTE KURSE</span>' : p(d.source === 'live' ? 'ok' : 'wn', d.source === 'live' ? 'Live-Kurse' : 'Daten starten'))
-    + (SK.cfg.broker === 'mt5' ? p(SK.broker.mt5.connected ? 'ok' : 'bad', SK.broker.mt5.connected && SK.broker.mt5.account ? 'MT5-Demo ' + SK.broker.mt5.account.login : 'MT5 getrennt') : p('', 'Paper-Konto'))
+    + (SK.cfg.broker === 'mt5' ? p(SK.broker.mt5.connected ? 'ok' : 'bad', SK.broker.mt5.connected && SK.broker.mt5.account ? 'MT5-Demo ' + SK.broker.mt5.account.login : 'MT5 getrennt – Mehr → Diagnose') : p('', 'Paper-Konto'))
     + p(SK.cfg.kill ? 'bad' : SK.cfg.auto ? 'ok' : 'wn', SK.cfg.kill ? 'Not-Aus AN' : SK.cfg.auto ? 'Auto AN' : 'Auto AUS')
     + p(err || SK.offline ? 'bad' : age > 180 ? 'wn' : 'ok', err || SK.offline ? 'offline' : age > 180 ? 'Bot hängt?' : 'Zyklus ' + e.cycle);
 }
@@ -227,9 +227,18 @@ function setupMehr() {
   $('#a-add').onclick = async () => { try { await post('api/skill/alarm', { sym: $('#a-sym').value, price: +$('#a-px').value, note: $('#a-note').value }); $('#a-px').value = ''; $('#a-note').value = ''; toast('Alarm gesetzt'); refresh(); } catch (e) { toast('Fehler', e.message, 'dn'); } };
   $('#logout').onclick = () => { if (!confirm('Dieses Gerät abmelden?')) return; TOK = null; localStorage.removeItem('ct_tok'); localStorage.removeItem('ct_sk'); location.reload(); };
 }
+// Klartext, woran die MT5-Verbindung gerade hängt
+function mt5Text(mt) { const d = mt.diag || {}, rec = t => t && Date.now() - t < 5 * 60e3;
+  if (mt.blocked) return '⛔ ' + mt.blocked;
+  if (mt.connected && mt.account) return `✅ verbunden · Demo ${mt.account.login} · ${mt.account.server} · ${nf(mt.account.equity)} ${mt.account.currency}`;
+  if (rec(d.authFail)) return '❌ Die Brücke erreicht den Server, aber CT_TOKEN in START.bat ist falsch (muss exakt dem API_TOKEN in Render entsprechen).';
+  if (rec(d.hello) && d.bridgeError) return '⚠️ Brücke läuft, aber MT5-Terminal: ' + d.bridgeError;
+  if (rec(d.poll) || rec(d.hello)) return '⏳ Brücke ist verbunden, wartet auf das MT5-Terminal …';
+  if (mt.lastSync) return `❌ Brücke meldet sich nicht mehr (zuletzt ${tm(mt.lastSync)}) – läuft START.bat noch?`;
+  return '❌ Die Brücke hat sich noch nie gemeldet. START.bat muss auf einem Windows-PC mit MetaTrader 5 laufen (iPhone-App reicht nicht).'; }
 let CFGBUSY = false;
 function mehr() { const c = SK.cfg, mt = (SK.broker || {}).mt5 || {}; $('#c-mt5').checked = c.broker === 'mt5';
-  $('#mt5-sub').textContent = mt.blocked ? mt.blocked : mt.connected && mt.account ? `verbunden · Demo ${mt.account.login} · ${mt.account.server} · ${nf(mt.account.equity)} ${mt.account.currency}` : c.broker === 'mt5' ? 'Brücke meldet sich nicht – bridge.py auf dem MT5-Rechner starten' : 'Orders über die MT5-Brücke ausführen (nur Demo)';
+  $('#mt5-sub').textContent = mt5Text(mt);
   $('#b-reset').disabled = c.broker === 'mt5'; $('#c-auto').checked = c.auto; $('#c-kill').checked = c.kill; $('#c-ai').checked = c.claude; $('#c-ai').disabled = !SK.engine.ai && !c.claude;
   $('#ai-sub').textContent = SK.engine.ai ? `Claude (${SK.engine.aiModel}) prüft jede Order` : 'ANTHROPIC_API_KEY auf dem Server setzen, um ihn zu aktivieren';
   if (!CFGBUSY) { $('#cfg').innerHTML = CFGUI.map(([k, n, u, lo, hi, st]) => `<div class="row"><div class="grow"><b>${n}</b><input class="rng" type="range" min="${lo}" max="${hi}" step="${st}" value="${c[k]}" data-k="${k}"></div><span class="val" id="v-${k}">${nf(c[k], st < 1 ? (st < .1 ? 2 : 1) : 0)}${u ? ' ' + u : ''}</span></div>`).join('');

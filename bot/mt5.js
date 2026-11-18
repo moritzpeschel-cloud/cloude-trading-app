@@ -7,7 +7,8 @@
 const fs = require('fs'), path = require('path'), U = require('./util'), I = require('./instruments');
 const DIR = process.env.DATA_DIR || '/tmp/cloude-skill', FILE = path.join(DIR, 'mt5.json');
 const MAGIC = +process.env.MT5_MAGIC || 261118, STALE = 60e3;
-let S = null, saveT = null, EURUSD = 1.08;
+let S = null, saveT = null, EURUSD = 1.08, DIAG = {};
+const note = o => { DIAG = { ...DIAG, ...o }; if (o.poll || o.hello) DIAG.authFail = DIAG.authFail && Math.max(o.poll || 0, o.hello || 0) > DIAG.authFail ? null : DIAG.authFail; };
 const blank = () => ({ v: 1, seq: 1, meta: {}, hist: [], curve: [], dayStart: null, start: null, queue: [], account: null, positions: [], orders: [], lastSync: 0, offset: {}, events: [], seen: [] });
 function load() { if (S) return acc(); try { S = { ...blank(), ...JSON.parse(fs.readFileSync(FILE, 'utf8')), positions: [], orders: [], account: null, lastSync: 0, events: [] }; } catch (_) { S = blank(); } return acc(); }
 function save(now) { if (!S) return; syncSl(); const w = () => { try { fs.mkdirSync(DIR, { recursive: true }); const { positions, orders, events, ...keep } = S; fs.writeFileSync(FILE + '.tmp', JSON.stringify(keep)); fs.renameSync(FILE + '.tmp', FILE); } catch (e) { console.warn('mt5 save', e.message); } };
@@ -56,7 +57,7 @@ function acc() { if (!S) return null; const eq = equity();
 function poll() { if (!S) load(); const now = Date.now(); S.queue = S.queue.filter(c => now - c.t < 10 * 60e3); return { cmds: S.queue, magic: MAGIC, watch: I.watchlist() }; }
 function sync(b, ourPrices = {}) {
   if (!S) load();
-  const now = Date.now(); S.lastSync = now; const a = b.account || {};
+  const now = Date.now(); S.lastSync = now; DIAG.bridgeError = null; DIAG.authFail = null; const a = b.account || {};
   if (a.trade_mode !== 0 && a.trade_mode !== 'DEMO') { S.account = null; S.blocked = 'Kein Demo-Konto – Brücke gesperrt'; return { ok: false, error: S.blocked }; }
   S.blocked = null; S.account = { login: a.login, server: String(a.server || '').slice(0, 60), company: String(a.company || '').slice(0, 60), currency: a.currency || 'EUR', balance: +a.balance || 0, equity: +a.equity || 0, leverage: a.leverage };
   if (ourPrices.EURUSD) EURUSD = ourPrices.EURUSD;
@@ -82,6 +83,6 @@ function sync(b, ourPrices = {}) {
   save(); return { ok: true, ...poll() };
 }
 const ensure = () => { if (!S) load(); };
-const status = () => S ? { connected: connected(), lastSync: S.lastSync || null, account: S.account, blocked: S.blocked || null, queue: S.queue.length, magic: MAGIC, offset: Object.fromEntries(Object.entries(S.offset).map(([k, v]) => [k, U.round(v, 5)])) } : { connected: false };
+const status = () => S ? { diag: { ...DIAG }, connected: connected(), lastSync: S.lastSync || null, account: S.account, blocked: S.blocked || null, queue: S.queue.length, magic: MAGIC, offset: Object.fromEntries(Object.entries(S.offset).map(([k, v]) => [k, U.round(v, 5)])) } : { connected: false };
 module.exports = { mode: 'mt5', load, save, reset() { throw new Error('MT5-Konto kann nicht zurückgesetzt werden – im Demo-Konto beim Broker zurücksetzen'); }, open, placeLimit, close, tick, equity, mark, stats, acc,
-  setFx: p => { if (p > .5 && p < 2) EURUSD = p; }, toEur: require('./broker').toEur, poll, sync, status, connected, cancel, MAGIC, _S: () => S };
+  setFx: p => { if (p > .5 && p < 2) EURUSD = p; }, toEur: require('./broker').toEur, poll, sync, status, connected, cancel, note, MAGIC, _S: () => S };
