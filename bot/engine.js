@@ -184,4 +184,7 @@ const mt5Sync = b => { const r = MT5.sync(b, priceMap());
     log(`MT5-Brücke verbunden – der Bot handelt ab jetzt im Demo-Konto ${a.login || ''} (${a.server || ''})`, [{ n: 'Broker', e: 'MT5-Demo' }], 'cfg');
     NOTIFY({ id: 'mt5on:' + (a.login || '') + ':' + U.berlin().date, kind: 'alert', color: 'green', title: '🔌 MT5-Demo verbunden', body: `Konto ${a.login || ''} · ${a.server || ''} – der Bot handelt jetzt dort` }); }
   return r; };
-module.exports = { mt5Note: o => MT5.note(o), mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };
+// öffentlicher Kurzstatus (ohne Kontonummer/Server): für /healthz
+const mt5Health = () => { const st = MT5.status(), d = st.diag || {}, ago = t => t ? Math.round((Date.now() - t) / 1000) : null;
+  return { mode: CFG.broker, connected: !!st.connected, lastSyncS: ago(st.lastSync), lastPollS: ago(d.poll), lastHelloS: ago(d.hello), tokenFailS: ago(d.authFail), problem: st.blocked || d.bridgeError || null }; };
+module.exports = { mt5Health, mt5Note: o => MT5.note(o), mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };
