@@ -39,7 +39,7 @@ const server = http.createServer(async (req, res) => {
   if (p.startsWith('/mp/api/') || p === '/mp/healthz' || p.startsWith('/mp/icons/')) p = p.slice(3);
   if (p === '/mp') { res.writeHead(301, { Location: '/mp/', ...SEC }); return res.end(); }
   try {
-    if (p === '/healthz') return send(res, 200, { ok: true, engine: engine ? { cycle: engine._S.cycle, ageS: engine._S.last ? Math.round((Date.now() - engine._S.last) / 1000) : null } : 'off', hasData: !!SNAP, ageS: LAST ? Math.round((Date.now() - LAST) / 1000) : null, alarm: watchdog.state() });
+    if (p === '/healthz') return send(res, 200, { ok: true, engine: engine ? { cycle: engine._S.cycle, ageS: engine._S.last ? Math.round((Date.now() - engine._S.last) / 1000) : null, mt5: engine.mt5Health() } : 'off', hasData: !!SNAP, ageS: LAST ? Math.round((Date.now() - LAST) / 1000) : null, alarm: watchdog.state() });
     if (p === '/api/alarm/test' && req.method === 'POST') {   // 🧪 TEST der Ausfall-Meldungen (Bot-Token oder Sitzung)
       const bt = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       if (!((API_TOKEN && eq(bt, API_TOKEN)) || valid(bt))) return send(res, 401, { error: 'unauthorized' });
