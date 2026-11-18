@@ -44,5 +44,11 @@ const U = require('./bot/util'), T = require('./bot/ta'), MC = require('./bot/mo
   // MT5 gewählt, Brücke nie da -> nach 10 Min. zurück auf Paper
   E.setConfig({ kill: false, broker: 'mt5' }); assert.equal(E.cfg().broker, 'mt5'); E._S.mt5Since = Date.now() - 11 * 60e3; await E.cycle();
   assert.equal(E.cfg().broker, 'paper', 'Rückfall auf Paper'); assert.ok(E.snapshot().journal.some(j => /Paper-Konto weiter/.test(j.text)));
+  // Playbook: Devisen/Aktien nur beobachten, Trend-Trailing zieht nach
+  const SG = require('./bot/strategy'); assert.equal(SG.playOf('EURUSD'), null); assert.equal(SG.playOf('XAUUSD'), 'trend'); assert.equal(SG.playOf('US500'), 'rsi2');
+  assert.equal(SG.signal('EURUSD', E._S.markets.EURUSD), null, 'kein Handel ohne bewährte Strategie');
+  const H2 = require('./bot/helpers'), mx = E._S.markets.ETHUSD, px0 = mx.h1[mx.h1.length - 30].c;
+  const fake = { sym: 'ETHUSD', dir: 1, entry: px0, sl: px0 * .5, sl0: px0 * .5, open: mx.h1[mx.h1.length - 30].t };
+  const acts = H2.manage([fake], E._S.markets, E._S.analysts, E.cfg(), Date.now()); assert.ok(fake.sl > px0 * .5, 'Trailing-Stop nachgezogen'); assert.ok(acts.length >= 1);
   console.log('trader-skill: alle Tests bestanden'); process.exit(0);
 })().catch(e => { console.error('FEHLER', e); process.exit(1); });

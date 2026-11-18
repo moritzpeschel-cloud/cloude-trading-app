@@ -114,19 +114,19 @@ function kpis() {
 // ---------- Trade-Plan ----------
 function ladder(f) { const dp = f.dp, p = f.plan, b = f.budget;
   return `<div class="ladder"><div class="cap">${f.hypo ? 'Probe-Rechnung · kein Signal' : 'Plan der Helfer'} · ${esc(f.sym)}</div>
-  <div class="lrow t"><span>Ziel</span><span>${nf(p.target, dp)}</span></div><div class="lrow e"><span>Einstieg</span><span>${nf(p.entry, dp)}</span></div>
+  <div class="lrow t"><span>Ausstieg</span><span>${esc(p.exit ? (f.sig.tf === '1d' ? 'Schluss > SMA 5' : 'Trailing 3,5 ATR') : nf(p.target, dp))}</span></div><div class="lrow e"><span>Einstieg</span><span>${nf(p.entry, dp)}</span></div>
   <div class="lrow g"><span>Grenze</span><span>${nf(p.stop, dp)}</span></div><div class="lrow m"><span>Max. Verlust</span><span>${b.ok || f.hypo ? '−' + eur(b.riskEur) : '–'}</span></div></div>`; }
 function checks(r) { return `<div class="checks">${(r.checks || []).map(c => `<div class="chk ${c.ok ? 'y' : 'n'}"><i>${c.ok ? '✓' : '✕'}</i><div>${esc(c.name)}<small>${esc(c.why)}</small></div></div>`).join('')}</div>`; }
 function planCard() {
   const f = SK.focus, el = $('#plan'); if (!f) { el.innerHTML = '<div class="empty">Die Helfer sammeln noch Daten …</div>'; return; }
   $('#plan-sub').textContent = `${f.hypo ? 'Beobachtung' : esc(f.sig.setup)} · ${ago(f.at)}`;
-  const dec = f.decision ? `<div class="decision ${/eröffnet|gelegt/.test(f.decision) ? 'ok' : 'no'}">${esc(f.decision)}</div>` : f.hypo && SK.pos.some(p => p.sym === f.sym) ? `<div class="decision ok">Offener Trade in ${esc(f.sym)} läuft – der Ausstieg-Helfer managt ihn (siehe „Offene Trades“). Hier die aktuelle Probe-Rechnung.</div>` : f.hypo ? `<div class="decision">Kein Setup im Scanner – die Helfer beobachten ${esc(f.sym)} und rechnen den Plan probehalber durch.</div>` : '';
+  const dec = f.decision ? `<div class="decision ${/eröffnet|gelegt|gesendet|läuft bereits/.test(f.decision) ? 'ok' : 'no'}">${esc(f.decision)}</div>` : f.hypo && SK.pos.some(p => p.sym === f.sym) ? `<div class="decision ok">Offener Trade in ${esc(f.sym)} läuft – der Ausstieg-Helfer managt ihn (siehe „Offene Trades“). Hier die aktuelle Probe-Rechnung.</div>` : f.hypo ? `<div class="decision">Kein Setup im Scanner – die Helfer beobachten ${esc(f.sym)} und rechnen den Plan probehalber durch.</div>` : '';
   el.innerHTML = `<div class="plhead"><div class="sym">${esc(f.sym)} ${side(f.hypo ? 0 : f.sig.dir)}<small>${esc(f.name)} · ${nf(f.price, f.dp)} · ${esc(f.analyst.regime)}</small></div>${CH.gauge(f.grade)}</div>
   <div class="plan mt2"><div>${ladder(f)}</div><div class="facts">
-   <div class="fact"><div class="l">Chance/Risiko</div><div class="v">${nf(f.plan.rr, 1)} R</div></div>
+   <div class="fact"><div class="l">Treffer (Rückblick)</div><div class="v">${pct(f.tm.bt.winrate, 0)}</div></div>
    <div class="fact"><div class="l">Größe</div><div class="v">${f.budget.lots ?? '–'}</div></div>
-   <div class="fact"><div class="l">Ziel zuerst</div><div class="v up">${pct(f.tm.mc.pTarget, 1)}</div></div>
-   <div class="fact"><div class="l">Grenze zuerst</div><div class="v dn">${pct(f.tm.mc.pStop, 1)}</div></div>
+   <div class="fact"><div class="l">Ø je Trade</div><div class="v ${cls(f.tm.bt.avgR)}">${sR(f.tm.bt.avgR)}</div></div>
+   <div class="fact"><div class="l">Profit-Faktor</div><div class="v">${f.tm.bt.pf == null ? '–' : nf(Math.min(f.tm.bt.pf, 99), 2)}</div></div>
    <div class="fact"><div class="l">Erwartung</div><div class="v ${cls(f.tm.adj.evR)}">${sR(f.tm.adj.evR)}</div></div>
    <div class="fact"><div class="l">Analyst</div><div class="v ${cls(f.analyst.bias)}">${f.analyst.bias >= 0 ? '+' : ''}${nf(f.analyst.bias, 2)}</div></div></div></div>
   <div class="mt2">${dec}</div>${f.claude ? `<div class="decision mt2 ${f.claude.verdict === 'VETO' ? 'no' : 'ok'}">✦ KI-Prüfer: ${esc(f.claude.t)}</div>` : ''}
@@ -135,10 +135,10 @@ function planCard() {
 
 // ---------- Time Machine ----------
 function probs(t) { const m = t.mc, a = t.adj;
-  return `<div class="probs"><div class="prob t"><i></i><span class="n">Ziel zuerst</span><b>${pct(m.pTarget)}</b><div class="bar">${CH.bar(m.pTarget, '#2fd27a')}</div></div>
+  return `<div class="probs"><div class="prob t"><i></i><span class="n">+3 R zuerst</span><b>${pct(m.pTarget)}</b><div class="bar">${CH.bar(m.pTarget, '#2fd27a')}</div></div>
   <div class="prob g"><i></i><span class="n">Grenze zuerst</span><b>${pct(m.pStop)}</b><div class="bar">${CH.bar(m.pStop, '#ff5a5f')}</div></div>
   <div class="prob k"><i></i><span class="n">Keins bis Schluss</span><b>${pct(m.pNone)}</b><div class="bar">${CH.bar(m.pNone, '#8b93a8')}</div></div>
-  <div class="facts"><div class="fact"><div class="l">Mit Historie</div><div class="v up">${pct(a.pTarget)}</div></div><div class="fact"><div class="l">Erwartung</div><div class="v ${cls(a.evR)}">${sR(a.evR)}</div></div><div class="fact"><div class="l">Rückblick</div><div class="v">${t.bt.n} Tr.</div></div></div></div>`; }
+  <div class="facts"><div class="fact"><div class="l">Treffer Rückblick</div><div class="v">${pct(t.bt.winrate, 0)}</div></div><div class="fact"><div class="l">Erwartung</div><div class="v ${cls(a.evR)}">${sR(a.evR)}</div></div><div class="fact"><div class="l">Rückblick</div><div class="v">${t.bt.n} Tr.</div></div></div></div>`; }
 function tmBlock(el, id) { const f = SK.focus; if (!f) { el.innerHTML = '<div class="empty">noch keine Rechnung</div>'; return; }
   el.innerHTML = `<div class="porthole"><div class="glass"><canvas id="${id}"></canvas><div class="cnt" id="${id}-n">${nf(f.tm.mc.n, 0)} DURCHLÄUFE</div></div></div><div>${probs(f.tm)}</div>`;
   const key = f.sym + f.at, cv = $('#' + id), mc = f.tm.mc, n = mc.n;
@@ -154,8 +154,8 @@ function tmPage() {
    ${bt.broad ? '<p class="hint">* zu wenige Fälle dieses Setups – Rückblick über alle Setups des Symbols.</p>' : ''}`;
   $('#tm-how').innerHTML = `<p><b>1 · Zukunft:</b> ${nf(f.tm.mc.n, 0)} Pfade aus echten vergangenen ${esc(f.sym)}-Kerzen (Block-Bootstrap, je 4 Kerzen am Stück). Die Richtung wird herausgerechnet – die Maschine wünscht sich nichts.</p>
    <p><b>2 · Treffer:</b> Pro Pfad zählt, ob zuerst das Ziel oder zuerst die Grenze berührt wird. Berührt eine Kerze beides, zählt die Grenze.</p>
-   <p><b>3 · Rückblick:</b> Dieselben Regeln, die live handeln, laufen über die letzten Kerzen (inkl. Spread). Ergebnis wird mit der Basisquote gemischt.</p>
-   <p><b>4 · Entscheidung:</b> Nur wenn der Erwartungswert ≥ ${nf(SK.cfg.minEV, 2)} R ist, gibt das Risiko-Team frei.</p>`;
+   <p><b>3 · Rückblick:</b> Genau das Playbook, das live handelt, läuft über bis zu 2 Jahre echte Kurse – nach Spread, Kommission und Übernacht-Finanzierung.</p>
+   <p><b>4 · Entscheidung:</b> Nur wenn der Rückblick nach Kosten ≥ ${nf(SK.cfg.minEV, 2)} R je Trade bringt, gibt das Risiko-Team frei. Devisen und Einzelaktien hatten im Labor keinen Vorteil und werden nur beobachtet.</p>`;
 }
 
 // ---------- Listen ----------
@@ -185,7 +185,7 @@ function markt() {
   const R = SK.scanner; $('#scan-sub').textContent = `${R.length} Märkte · ${R.filter(r => r.sig).length} Setups`;
   $('#scan').innerHTML = `<tr><th>Markt</th><th class="r">Kurs</th><th class="r">24 h</th><th>Verlauf</th><th>Signal</th><th class="r">RSI</th><th class="r">ADX</th></tr>` + R.map(r => `<tr class="click" data-sym="${esc(r.sym)}">
    <td><b>${esc(r.sym)}</b><div class="mut">${esc(r.name)}${r.open ? '' : ' · <span class="closed">GESCHLOSSEN</span>'}</div></td><td class="r">${nf(r.price, r.dp)}</td><td class="r ${cls(r.chg)}">${r.chg >= 0 ? '+' : ''}${pct(r.chg, 2)}</td>
-   <td>${CH.spark(r.spark, r.spark[r.spark.length - 1] >= r.spark[0])}</td><td>${r.sig ? `<span class="sig ${r.sig.dir > 0 ? 'b' : 's'}">${r.sig.dir > 0 ? '▲' : '▼'} ${esc(r.sig.setup)}</span> <span class="qbar">${CH.bar(r.sig.q, r.sig.q >= SK.cfg.minScore ? '#f5c451' : '#55607a')}</span>` : '<span class="sig n">–</span>'}</td>
+   <td>${CH.spark(r.spark, r.spark[r.spark.length - 1] >= r.spark[0])}</td><td>${r.sig ? `<span class="sig ${r.sig.dir > 0 ? 'b' : 's'}">${r.sig.dir > 0 ? '▲' : '▼'} ${esc(r.sig.setup)}</span>` : r.play ? `<span class="sig n">${esc(r.play)} · wartet</span>` : '<span class="sig n">nur beobachten</span>'}</td>
    <td class="r">${nf(r.rsi, 0)}</td><td class="r">${nf(r.adx, 0)}</td></tr>`).join('');
   $$('#scan tr[data-sym]').forEach(t => t.onclick = () => { SEL = t.dataset.sym; analyze(); $('#ana').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   $('#kong').innerHTML = kongList();

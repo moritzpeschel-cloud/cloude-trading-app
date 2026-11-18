@@ -8,7 +8,7 @@ const M = require('./market'), T = require('./ta'), H = require('./helpers'), PA
 const K = require('./congress'), AI = require('./claude');
 const DIR = process.env.DATA_DIR || '/tmp/cloude-skill', CFG_FILE = path.join(DIR, 'config.json'), AL_FILE = path.join(DIR, 'alarms.json');
 let B = PAPER;
-const DEF = { broker: 'paper', auto: true, kill: false, riskPct: 0.75, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.08, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
+const DEF = { broker: process.env.BROKER === 'mt5' ? 'mt5' : 'paper', auto: true, kill: false, riskPct: 0.5, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.05, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
 const LIM = { riskPct: [0.05, 3], maxDailyLossPct: [0.5, 10], maxOpen: [1, 10], maxPerGroup: [1, 6], maxLeverage: [1, 30], minScore: [0.4, 0.95], minEV: [-0.2, 1], rr: [1, 5], horizon: [6, 120], mcRuns: [1000, 20000] };
 let CFG = { ...DEF }, ALARMS = [], NOTIFY = () => {}, TIMER = null, RUNNING = false, BUSY = false;
 const S = { gen: 0, cycle: 0, lastMs: 0, last: 0, helpers: {}, scanner: [], focus: null, journal: [], alarmLog: [], markets: {}, analysts: {}, error: null, started: Date.now(), dup: new Set() };
@@ -45,12 +45,13 @@ function setConfig(b) {
 // ---------- Analyse eines Symbols (auch ohne Trade, z. B. „Analysieren“ im Dashboard) ----------
 async function analyze(sym, sigIn = null, ctx = null) {
   await K.refresh(); const m = S.markets[sym] || await loadMarket(sym), now = Date.now(); if (!m || m.h1.length < 220) throw new Error('zu wenig Daten für ' + sym);
-  const i = H.lastClosed(m.h1); let sig = sigIn || T && require('./strategy').setupAt(m.h1, m.s, i), hypo = false;
+  const i = H.lastClosed(m.h1); let sig = sigIn || require('./strategy').signal(sym, m), hypo = false;
+  if (sig && sig.stopDist == null) { const a14 = m.s.atr[i]; sig = { tf: '1h', t: m.h1[i].t, ref: m.h1[i].c, atr: a14, stopDist: 2 * a14, play: require('./strategy').playOf(sym), ...sig }; }   // z. B. manuell eingespeiste Signale
   const an = H.analyst(sym, m); S.analysts[sym] = an;
-  if (!sig) { hypo = true; sig = { dir: an.bias >= 0 ? 1 : -1, setup: 'Beobachtung (kein Signal)', q: 0 }; }
+  if (!sig) { hypo = true; const a14 = m.s.atr[i]; sig = { dir: an.bias >= 0 ? 1 : -1, setup: 'Beobachtung (kein Signal)', q: 0, tf: '1h', t: m.h1[i].t, ref: m.h1[i].c, atr: a14, stopDist: 2 * a14, play: null }; }
   const [nw, ko] = [await H.news(sym, now), H.kongress(sym)];
   const ein = H.einstieg(sym, m, sig), entry = ein.type === 'limit' ? ein.price : m.price;
-  const plan = H.ausstiegPlan(sym, m, sig, entry, CFG), tm = H.timemachine(sym, m, sig, plan, CFG, U.hash(sym + m.h1[i].t));
+  const plan = H.ausstiegPlan(sym, m, sig, entry), tm = H.timemachine(sym, m, sig, plan, CFG, U.hash(sym + m.h1[i].t));
   if (!B.acc()) B.load(CFG.startBalance); const acc = B.acc(), prices = priceMap(), eq = B.equity(prices);
   ctx = ctx || { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk() };
   const rk = H.risiko(sym, sig, plan, tm, an, nw, ctx), bu = H.budget(sym, plan, tm, ctx);
@@ -105,7 +106,7 @@ async function cycle() {
       const m = S.markets[c.sym], key = c.sym + '|' + c.bar + '|' + c.sig.dir;
       const a = await analyze(c.sym, c.sig, { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk() });
       if (a.grade > best) { best = a.grade; focus = a; }
-      if (S.dup.has(key)) continue;   // dieses Signal (Kerze) wurde schon entschieden
+      if (S.dup.has(key)) { a.decision = acc.pos.some(p => p.sym === c.sym) ? 'Trade zu diesem Signal läuft bereits' : 'Signal wurde bereits entschieden'; continue; }   // dieses Signal (Kerze) wurde schon entschieden
       let decision = null;
       if (!CFG.auto) decision = 'Auto-Trading aus – nur Vorschlag';
       else if (!a.risiko.ok) decision = 'Risiko-Veto: ' + a.risiko.checks.filter(x => !x.ok).map(x => x.name).join(', ');

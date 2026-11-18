@@ -60,7 +60,7 @@ function simulate(sym, now = Date.now()) {
   const cur = Math.floor(now / H) * H;
   while (st.t < cur) { const b = simStep(st, inst, st.r); if (isOpen(inst, st.t)) st.bars.push({ t: st.t, ...b }); else st.p = b.o; st.t += H; if (st.bars.length > 9000) st.bars.splice(0, 2000); }
   // laufende Kerze minutengenau (deterministisch je Stunde)
-  const bars = st.bars.slice(-1500);
+  const bars = st.bars.slice(-9000);
   if (isOpen(inst, now)) {
     const r = U.rng(U.hash(sym + '|' + cur)), mins = Math.floor((now - cur) / 60e3), s = Math.sqrt(st.s2) / Math.sqrt(60);
     let p = st.p, h = p, l = p; for (let m = 0; m <= mins; m++) { p *= Math.exp(U.gauss(r) * s + st.drift / 60); h = Math.max(h, p); l = Math.min(l, p); }
@@ -89,12 +89,12 @@ async function load(sym, now = Date.now()) {
   if (!c || c.src !== 'live') c = { h1: [], d1: [], price: null, t: 0, src: 'live', fetchedH1: 0, fetchedD1: 0 };
   try {
     if (!c.h1.length || now - c.fetchedH1 > 55e3) {
-      const full = !c.h1.length || now - c.fetchedFull > 6 * H;
-      const r = await yahoo(sym, full ? '60d' : '5d', '1h');
-      if (full) { c.h1 = r.bars; c.fetchedFull = now; } else { const from = r.bars.length ? r.bars[0].t : Infinity; c.h1 = c.h1.filter(b => b.t < from).concat(r.bars).slice(-1500); }
+      const full = !c.h1.length || now - c.fetchedFull > 24 * H;
+      const r = await yahoo(sym, full ? '730d' : '5d', '1h');
+      if (full) { c.h1 = r.bars; c.fetchedFull = now; } else { const from = r.bars.length ? r.bars[0].t : Infinity; c.h1 = c.h1.filter(b => b.t < from).concat(r.bars).slice(-20000); }
       c.price = r.price; c.mt = r.mt; c.fetchedH1 = now;
     }
-    if (!c.d1.length || now - c.fetchedD1 > 6 * H) { c.d1 = (await yahoo(sym, '2y', '1d')).bars; c.fetchedD1 = now; }
+    if (!c.d1.length || now - c.fetchedD1 > 6 * H) { c.d1 = (await yahoo(sym, '5y', '1d')).bars; c.fetchedD1 = now; }
     c.err = null;
   } catch (e) { c.err = String(e.message || e).slice(0, 60); lastError = sym + ': ' + c.err; if (!c.h1.length) throw e; }
   c.t = now; c.open = isOpen(inst, now) && now - (c.mt || 0) < 3 * H; cache.set(sym, c); return c;
