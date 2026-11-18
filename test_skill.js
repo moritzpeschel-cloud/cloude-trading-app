@@ -41,5 +41,8 @@ const U = require('./bot/util'), T = require('./bot/ta'), MC = require('./bot/mo
   const px = E._S.markets.XAUUSD.price, al = E.addAlarm({ sym: 'XAUUSD', price: px * 1.01 }); assert.equal(al.dir, 1);
   await E._alarms({ XAUUSD: px * 1.005 }, 10000); assert.ok(!E.snapshot().alarmLog.some(x => x.id === 'al:' + al.id), 'noch nicht');
   await E._alarms({ XAUUSD: px * 1.02 }, 10000); assert.ok(E.snapshot().alarmLog.some(x => x.id === 'al:' + al.id), 'Kurs-Alarm ausgelöst');
+  // MT5 gewählt, Brücke nie da -> nach 10 Min. zurück auf Paper
+  E.setConfig({ kill: false, broker: 'mt5' }); assert.equal(E.cfg().broker, 'mt5'); E._S.mt5Since = Date.now() - 11 * 60e3; await E.cycle();
+  assert.equal(E.cfg().broker, 'paper', 'Rückfall auf Paper'); assert.ok(E.snapshot().journal.some(j => /Paper-Konto weiter/.test(j.text)));
   console.log('trader-skill: alle Tests bestanden'); process.exit(0);
 })().catch(e => { console.error('FEHLER', e); process.exit(1); });
