@@ -14,6 +14,13 @@ services:
         sync: false
       - key: NODE_VERSION
         value: "20"
+      # Trader-Skill-Engine (optional): KI-Prüfer mit Claude, Politiker-Trades, eigene Watchlist
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: QUIVER_API_KEY
+        sync: false
+      - key: WATCHLIST
+        value: "XAUUSD,EURUSD,GBPUSD,US500,NAS100,GER40,BTCUSD,ETHUSD,AAPL,NVDA,MSFT,TSLA"
       # optional: Ausfall-Alarm zusätzlich per Telegram direkt von Render (gleiche Werte wie in der Bot-.env)
       - key: TELEGRAM_BOT_TOKEN
         sync: false
