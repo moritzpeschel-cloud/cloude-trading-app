@@ -19,7 +19,7 @@ let PX = {}; const bridge = (extra = {}) => execFileSync('python3', [path.join(_
   for (let i = 0; i < 80; i++) { try { if ((await fetch(B + '/healthz')).ok) break; } catch {} await new Promise(r => setTimeout(r, 100)); }
   try {
     assert.equal((await fetch(B + '/api/mt5/poll')).status, 401, 'Brücke braucht Token');
-    await fetch(B + '/api/skill/control', { method: 'POST', headers: H, body: '{"action":"broker_mt5"}' });
+    // Brücke verbindet -> Bot schaltet automatisch auf MT5
     PX = await ctl('/prices');
     // Echtgeld-Konto wird abgelehnt
     let blocked = false; try { bridge({ FAKE_MODE: '2' }); } catch (e) { blocked = /KEIN Demo-Konto/.test(e.stdout + e.stderr); } assert.ok(blocked, 'Echtgeld verweigert');

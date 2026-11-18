@@ -9,7 +9,7 @@ const DIR = process.env.DATA_DIR || '/tmp/cloude-skill', FILE = path.join(DIR, '
 const MAGIC = +process.env.MT5_MAGIC || 261118, STALE = 60e3;
 let S = null, saveT = null, EURUSD = 1.08;
 const blank = () => ({ v: 1, seq: 1, meta: {}, hist: [], curve: [], dayStart: null, start: null, queue: [], account: null, positions: [], orders: [], lastSync: 0, offset: {}, events: [], seen: [] });
-function load() { try { S = { ...blank(), ...JSON.parse(fs.readFileSync(FILE, 'utf8')), positions: [], orders: [], account: null, lastSync: 0, events: [] }; } catch (_) { S = blank(); } return acc(); }
+function load() { if (S) return acc(); try { S = { ...blank(), ...JSON.parse(fs.readFileSync(FILE, 'utf8')), positions: [], orders: [], account: null, lastSync: 0, events: [] }; } catch (_) { S = blank(); } return acc(); }
 function save(now) { if (!S) return; syncSl(); const w = () => { try { fs.mkdirSync(DIR, { recursive: true }); const { positions, orders, events, ...keep } = S; fs.writeFileSync(FILE + '.tmp', JSON.stringify(keep)); fs.renameSync(FILE + '.tmp', FILE); } catch (e) { console.warn('mt5 save', e.message); } };
   if (now) return w(); clearTimeout(saveT); saveT = setTimeout(w, 1500); }
 const connected = () => !!S && Date.now() - S.lastSync < STALE;
