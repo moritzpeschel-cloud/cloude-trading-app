@@ -119,7 +119,7 @@ function checks(r) { return `<div class="checks">${(r.checks || []).map(c => `<d
 function planCard() {
   const f = SK.focus, el = $('#plan'); if (!f) { el.innerHTML = '<div class="empty">Die Helfer sammeln noch Daten …</div>'; return; }
   $('#plan-sub').textContent = `${f.hypo ? 'Beobachtung' : esc(f.sig.setup)} · ${ago(f.at)}`;
-  const dec = f.decision ? `<div class="decision ${/eröffnet|gelegt/.test(f.decision) ? 'ok' : 'no'}">${esc(f.decision)}</div>` : f.hypo ? `<div class="decision">Kein Setup im Scanner – die Helfer beobachten ${esc(f.sym)} und rechnen den Plan probehalber durch.</div>` : '';
+  const dec = f.decision ? `<div class="decision ${/eröffnet|gelegt/.test(f.decision) ? 'ok' : 'no'}">${esc(f.decision)}</div>` : f.hypo && SK.pos.some(p => p.sym === f.sym) ? `<div class="decision ok">Offener Trade in ${esc(f.sym)} läuft – der Ausstieg-Helfer managt ihn (siehe „Offene Trades“). Hier die aktuelle Probe-Rechnung.</div>` : f.hypo ? `<div class="decision">Kein Setup im Scanner – die Helfer beobachten ${esc(f.sym)} und rechnen den Plan probehalber durch.</div>` : '';
   el.innerHTML = `<div class="plhead"><div class="sym">${esc(f.sym)} ${side(f.hypo ? 0 : f.sig.dir)}<small>${esc(f.name)} · ${nf(f.price, f.dp)} · ${esc(f.analyst.regime)}</small></div>${CH.gauge(f.grade)}</div>
   <div class="plan mt2"><div>${ladder(f)}</div><div class="facts">
    <div class="fact"><div class="l">Chance/Risiko</div><div class="v">${nf(f.plan.rr, 1)} R</div></div>
