@@ -79,6 +79,14 @@ const server = http.createServer(async (req, res) => {
       const r = await push.handle(p, req, res, { send, body, token: API_TOKEN, bearerOk: () => !!API_TOKEN && eq(bearer(), API_TOKEN), sessionOk: () => valid(bearer()) });
       if (r !== false) return;
     }
+    if (p === '/api/mt5/poll' || p === '/api/mt5/sync') {   // MT5-Brücke (mt5_bridge/bridge.py) – nur mit Bot-Token
+      const bt = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      if (!API_TOKEN || !eq(bt, API_TOKEN)) return send(res, 401, { error: 'unauthorized' });
+      if (!engine) return send(res, 503, { error: 'Engine ist aus' });
+      if (p === '/api/mt5/poll') return send(res, 200, engine.mt5Poll());
+      if (req.method !== 'POST') return send(res, 405, { error: 'POST erwartet' });
+      return send(res, 200, engine.mt5Sync(await body(req)));
+    }
     if (p.startsWith('/api/skill')) {   // Trader-Skill: Sitzung (Handy) ODER Bot-Token (CLI)
       const bt = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       if (!((API_TOKEN && eq(bt, API_TOKEN)) || valid(bt))) return send(res, 401, { error: 'Anmeldung nötig' });
@@ -94,7 +102,7 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req);
       if (p === '/api/skill/config') return send(res, 200, { ok: true, cfg: engine.setConfig(b || {}) });
       if (p === '/api/skill/control') {
-        const a = String(b.action || ''), m = { auto_on: { auto: true }, auto_off: { auto: false }, kill_on: { kill: true }, kill_off: { kill: false }, ai_on: { claude: true }, ai_off: { claude: false } };
+        const a = String(b.action || ''), m = { auto_on: { auto: true }, auto_off: { auto: false }, kill_on: { kill: true }, kill_off: { kill: false }, ai_on: { claude: true }, ai_off: { claude: false }, broker_mt5: { broker: 'mt5' }, broker_paper: { broker: 'paper' } };
         if (m[a]) return send(res, 200, { ok: true, cfg: engine.setConfig(m[a]) });
         if (a === 'close_all') return send(res, 200, { ok: true, closed: engine.closeAll().length });
         if (a === 'kill_all') { engine.setConfig({ kill: true }); return send(res, 200, { ok: true, closed: engine.closeAll('Not-Aus: alles geschlossen').length }); }
@@ -102,7 +110,7 @@ const server = http.createServer(async (req, res) => {
         if (a === 'cycle') { await engine.cycle(); return send(res, 200, { ok: true }); }
         return send(res, 400, { error: 'unbekannte Aktion' });
       }
-      if (p === '/api/skill/reset') { engine.resetAccount(b.balance); return send(res, 200, { ok: true }); }
+      if (p === '/api/skill/reset') { try { engine.resetAccount(b.balance); return send(res, 200, { ok: true }); } catch (e) { return send(res, 400, { error: e.message }); } }
       if (p === '/api/skill/alarm') { try { return send(res, 200, { ok: true, alarm: engine.addAlarm(b) }); } catch (e) { return send(res, 400, { error: e.message }); } }
       if (p === '/api/skill/alarm/delete') { engine.delAlarm(String(b.id || '')); return send(res, 200, { ok: true }); }
       return send(res, 404, { error: 'not found' });

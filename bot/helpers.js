@@ -105,6 +105,7 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
   const { cfg, acc, eq, positions, open } = ctx, inst = I.get(sym), dayPnl = eq - acc.dayStart.eq, checks = [];
   const add = (ok, name, why) => checks.push({ ok, name, why });
   add(!cfg.kill, 'Not-Aus', cfg.kill ? 'Not-Aus ist AN' : 'aus');
+  if (ctx.broker === false) add(false, 'MT5 verbunden', 'Brücke meldet sich nicht – Order wird nicht gesendet');
   add(open, 'Markt offen', open ? 'Handelszeit' : 'Markt geschlossen / Daten veraltet');
   add(dayPnl > -cfg.maxDailyLossPct / 100 * acc.dayStart.eq, 'Tageslimit', `Heute ${dayPnl.toFixed(2)} € (Limit −${(cfg.maxDailyLossPct / 100 * acc.dayStart.eq).toFixed(0)} €)`);
   add(positions.length < cfg.maxOpen, 'Max. Positionen', `${positions.length}/${cfg.maxOpen} offen`);

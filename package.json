@@ -6,7 +6,7 @@
  "main": "server.js",
  "scripts": {
   "start": "node server.js",
-  "test": "node test.js && node test_watchdog.js && node test_skill.js",
+  "test": "node test.js && node test_watchdog.js && node test_skill.js && node test_mt5.js",
   "analyze": "node bot/cli.js"
  },
  "engines": {

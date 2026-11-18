@@ -50,6 +50,7 @@ function pills(err) {
   if (!SK) return; const e = SK.engine, d = SK.data, age = (Date.now() - e.last) / 1000;
   const p = (c, t) => `<span class="pill ${c}"><i></i>${esc(t)}</span>`;
   $('#pills').innerHTML = (d.source === 'sim' ? '<span class="pill sim">SIMULIERTE KURSE</span>' : p(d.source === 'live' ? 'ok' : 'wn', d.source === 'live' ? 'Live-Kurse' : 'Daten starten'))
+    + (SK.cfg.broker === 'mt5' ? p(SK.broker.mt5.connected ? 'ok' : 'bad', SK.broker.mt5.connected && SK.broker.mt5.account ? 'MT5-Demo ' + SK.broker.mt5.account.login : 'MT5 getrennt') : p('', 'Paper-Konto'))
     + p(SK.cfg.kill ? 'bad' : SK.cfg.auto ? 'ok' : 'wn', SK.cfg.kill ? 'Not-Aus AN' : SK.cfg.auto ? 'Auto AN' : 'Auto AUS')
     + p(err || SK.offline ? 'bad' : age > 180 ? 'wn' : 'ok', err || SK.offline ? 'offline' : age > 180 ? 'Bot hängt?' : 'Zyklus ' + e.cycle);
 }
@@ -105,7 +106,7 @@ function sheet(k) {
 // ---------- Kennzahlen ----------
 function kpis() {
   const A = SK.acc, s = A.stats, k = (l, v, sub, c, id) => `<div class="kpi">${id ? `<canvas id="${id}"></canvas>` : ''}<div class="l">${l}</div><div class="v ${c || ''}">${v}</div><div class="s">${sub || ''}</div></div>`;
-  $('#kpis').innerHTML = k('Equity', eur(A.equity), `Start ${eur(A.start)}`, '', 'kpi-eq') + k('Heute', sg(A.today), 'realisiert + offen', cls(A.today)) + k('Gesamt', sg(A.total), pct(A.total / A.start, 2), cls(A.total))
+  $('#kpis').innerHTML = k(isMT ? 'Equity · MT5' : 'Equity · Paper', eur(A.equity), `Start ${eur(A.start)}`, '', 'kpi-eq') + k('Heute', sg(A.today), 'realisiert + offen', cls(A.today)) + k('Gesamt', sg(A.total), pct(A.total / A.start, 2), cls(A.total))
     + k('Trefferquote', s.winrate == null ? '–' : pct(s.winrate, 0), `${s.wins} G / ${s.losses} V`) + k('Profit-Faktor', s.pf == null ? '–' : nf(Math.min(s.pf, 99), 2), `Ø ${sR(s.avgR)}`) + k('Max. Drawdown', pct(s.maxDD, 1), `${A.open} offen`, s.maxDD > .1 ? 'dn' : '');
   const c = $('#kpi-eq'); if (c) CH.area(c, A.curve, { mini: true, base: A.start });
 }
@@ -219,7 +220,7 @@ const CFGUI = [['riskPct', 'Risiko je Trade', '%', .05, 3, .05], ['maxDailyLossP
   ['minScore', 'Min. Setup-Qualität', '', .4, .95, .01], ['minEV', 'Min. Erwartungswert', 'R', -.2, 1, .01], ['rr', 'Chance/Risiko-Ziel', 'R', 1, 5, .1], ['horizon', 'Time-Machine-Horizont', 'h', 6, 120, 6], ['mcRuns', 'Monte-Carlo-Durchläufe', '', 1000, 20000, 1000], ['maxLeverage', 'Max. Hebel', '×', 1, 30, 1]];
 function setupMehr() {
   const ctl = (id, a, b) => $(id).onchange = async e => { try { await post('api/skill/control', { action: e.target.checked ? a : b }); toast('Gespeichert'); refresh(); } catch (er) { toast('Fehler', er.message, 'dn'); e.target.checked = !e.target.checked; } };
-  ctl('#c-auto', 'auto_on', 'auto_off'); ctl('#c-kill', 'kill_on', 'kill_off'); ctl('#c-ai', 'ai_on', 'ai_off');
+  ctl('#c-auto', 'auto_on', 'auto_off'); ctl('#c-mt5', 'broker_mt5', 'broker_paper'); ctl('#c-kill', 'kill_on', 'kill_off'); ctl('#c-ai', 'ai_on', 'ai_off');
   $('#b-cycle').onclick = async () => { $('#b-cycle').disabled = true; try { await post('api/skill/control', { action: 'cycle' }); await refresh(); toast('Zyklus ausgeführt'); } catch (e) { toast('Fehler', e.message, 'dn'); } $('#b-cycle').disabled = false; };
   $('#b-closeall').onclick = async () => { if (!confirm('ALLE offenen Paper-Trades und Orders schließen?')) return; try { const r = await post('api/skill/control', { action: 'close_all' }); toast(`${r.closed} Trade(s) geschlossen`); refresh(); } catch (e) { toast('Fehler', e.message, 'dn'); } };
   $('#b-reset').onclick = async () => { const b = +$('#r-bal').value || 10000; if (!confirm(`Paper-Konto komplett zurücksetzen auf ${nf(b, 0)} €? Verlauf wird gelöscht.`)) return; try { await post('api/skill/reset', { balance: b }); toast('Konto zurückgesetzt'); refresh(); } catch (e) { toast('Fehler', e.message, 'dn'); } };
@@ -227,7 +228,9 @@ function setupMehr() {
   $('#logout').onclick = () => { if (!confirm('Dieses Gerät abmelden?')) return; TOK = null; localStorage.removeItem('ct_tok'); localStorage.removeItem('ct_sk'); location.reload(); };
 }
 let CFGBUSY = false;
-function mehr() { const c = SK.cfg; $('#c-auto').checked = c.auto; $('#c-kill').checked = c.kill; $('#c-ai').checked = c.claude; $('#c-ai').disabled = !SK.engine.ai && !c.claude;
+function mehr() { const c = SK.cfg, mt = (SK.broker || {}).mt5 || {}; $('#c-mt5').checked = c.broker === 'mt5';
+  $('#mt5-sub').textContent = mt.blocked ? mt.blocked : mt.connected && mt.account ? `verbunden · Demo ${mt.account.login} · ${mt.account.server} · ${nf(mt.account.equity)} ${mt.account.currency}` : c.broker === 'mt5' ? 'Brücke meldet sich nicht – bridge.py auf dem MT5-Rechner starten' : 'Orders über die MT5-Brücke ausführen (nur Demo)';
+  $('#b-reset').disabled = c.broker === 'mt5'; $('#c-auto').checked = c.auto; $('#c-kill').checked = c.kill; $('#c-ai').checked = c.claude; $('#c-ai').disabled = !SK.engine.ai && !c.claude;
   $('#ai-sub').textContent = SK.engine.ai ? `Claude (${SK.engine.aiModel}) prüft jede Order` : 'ANTHROPIC_API_KEY auf dem Server setzen, um ihn zu aktivieren';
   if (!CFGBUSY) { $('#cfg').innerHTML = CFGUI.map(([k, n, u, lo, hi, st]) => `<div class="row"><div class="grow"><b>${n}</b><input class="rng" type="range" min="${lo}" max="${hi}" step="${st}" value="${c[k]}" data-k="${k}"></div><span class="val" id="v-${k}">${nf(c[k], st < 1 ? (st < .1 ? 2 : 1) : 0)}${u ? ' ' + u : ''}</span></div>`).join('');
     $$('#cfg input').forEach(i => { const row = CFGUI.find(x => x[0] === i.dataset.k); i.oninput = () => { CFGBUSY = true; $('#v-' + row[0]).textContent = nf(+i.value, row[5] < 1 ? (row[5] < .1 ? 2 : 1) : 0) + (row[2] ? ' ' + row[2] : ''); };
@@ -281,7 +284,7 @@ let pushInit = false; function pushStart() { if (pushInit) return; pushInit = tr
 function renderAll(pageChange) { if (!SK) return; pills();
   try { if (PAGE === 'cockpit') cockpit(); else if (PAGE === 'markt') markt(); else if (PAGE === 'tm') tmPage(); else if (PAGE === 'trades') trades(); else if (PAGE === 'mehr') mehr(); else stage(); } catch (e) { console.error(e); }
   if (PAGE !== 'cockpit') stage();
-  const e = SK.engine; $('#foot').textContent = `Trader-Skill · ${e.watch} Märkte · ${SK.data.source === 'sim' ? 'simulierte Kurse' : 'Live-Kurse'} · Paper-Konto · keine Anlageberatung`;
+  const e = SK.engine; $('#foot').textContent = `Trader-Skill · ${e.watch} Märkte · ${SK.data.source === 'sim' ? 'simulierte Kurse' : 'Live-Kurse'} · ${SK.cfg.broker === 'mt5' ? 'MT5-Demo' : 'Paper-Konto'} · keine Anlageberatung`;
   const sf = $('#sfoot'); if (sf) sf.textContent = `Zyklus ${e.cycle} · ${ago(e.last || Date.now())}`; }
 let rT = 0; addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => renderAll(), 200); });
 (async () => { if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});

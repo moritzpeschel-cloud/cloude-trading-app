@@ -4,10 +4,11 @@
 // Ergebnis: snapshot() für das Dashboard. Nur Paper-Trading – es wird nie echtes Geld bewegt.
 'use strict';
 const fs = require('fs'), path = require('path');
-const M = require('./market'), T = require('./ta'), H = require('./helpers'), B = require('./broker'), I = require('./instruments'), U = require('./util');
+const M = require('./market'), T = require('./ta'), H = require('./helpers'), PAPER = require('./broker'), MT5 = require('./mt5'), I = require('./instruments'), U = require('./util');
 const K = require('./congress'), AI = require('./claude');
 const DIR = process.env.DATA_DIR || '/tmp/cloude-skill', CFG_FILE = path.join(DIR, 'config.json'), AL_FILE = path.join(DIR, 'alarms.json');
-const DEF = { auto: true, kill: false, riskPct: 0.75, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.08, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
+let B = PAPER;
+const DEF = { broker: 'paper', auto: true, kill: false, riskPct: 0.75, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.08, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
 const LIM = { riskPct: [0.05, 3], maxDailyLossPct: [0.5, 10], maxOpen: [1, 10], maxPerGroup: [1, 6], maxLeverage: [1, 30], minScore: [0.4, 0.95], minEV: [-0.2, 1], rr: [1, 5], horizon: [6, 120], mcRuns: [1000, 20000] };
 let CFG = { ...DEF }, ALARMS = [], NOTIFY = () => {}, TIMER = null, RUNNING = false, BUSY = false;
 const S = { gen: 0, cycle: 0, lastMs: 0, last: 0, helpers: {}, scanner: [], focus: null, journal: [], alarmLog: [], markets: {}, analysts: {}, error: null, started: Date.now(), dup: new Set() };
@@ -20,9 +21,12 @@ const log = (text, chips = [], kind = 'info', sym = null) => { S.journal.unshift
 const fmt = (sym, x) => U.fmtPrice(x, I.get(sym).dp), side = d => d > 0 ? 'KAUF' : 'VERKAUF';
 const eur = v => (v >= 0 ? '+' : '−') + Math.abs(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
+const brokerOk = () => B.mode !== 'mt5' || MT5.connected();
+function useBroker() { B = CFG.broker === 'mt5' ? MT5 : PAPER; B.load(CFG.startBalance); S.dup = new Set(); }
 function setConfig(b) {
   for (const k of Object.keys(DEF)) { if (!(k in b)) continue;
-    if (typeof DEF[k] === 'boolean') CFG[k] = !!b[k];
+    if (k === 'broker') { const v = b.broker === 'mt5' ? 'mt5' : 'paper'; if (v !== CFG.broker) { CFG.broker = v; useBroker(); log(v === 'mt5' ? 'Broker gewechselt: MT5-Demo-Konto (über die Brücke)' : 'Broker gewechselt: Paper-Konto', [{ n: 'Broker', e: v }], 'cfg'); } }
+    else if (typeof DEF[k] === 'boolean') CFG[k] = !!b[k];
     else if (LIM[k] && isFinite(+b[k])) CFG[k] = U.clamp(+b[k], ...LIM[k]); }
   persist(); log(`Einstellungen geändert: ${Object.keys(b).filter(k => k in DEF).map(k => k + '=' + CFG[k]).join(', ')}`, [], 'cfg'); return CFG;
 }
@@ -36,7 +40,7 @@ async function analyze(sym, sigIn = null, ctx = null) {
   const ein = H.einstieg(sym, m, sig), entry = ein.type === 'limit' ? ein.price : m.price;
   const plan = H.ausstiegPlan(sym, m, sig, entry, CFG), tm = H.timemachine(sym, m, sig, plan, CFG, U.hash(sym + m.h1[i].t));
   if (!B.acc()) B.load(CFG.startBalance); const acc = B.acc(), prices = priceMap(), eq = B.equity(prices);
-  ctx = ctx || { cfg: CFG, acc, eq, positions: acc.pos, open: m.open };
+  ctx = ctx || { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk() };
   const rk = H.risiko(sym, sig, plan, tm, an, nw, ctx), bu = H.budget(sym, plan, tm, ctx);
   // Gesamtnote 0..100 (wie stark stimmen die Helfer überein?)
   const al = x => U.clamp(x * sig.dir, -1, 1);
@@ -62,14 +66,15 @@ async function cycle() {
     const res = await Promise.allSettled(wl.map(loadMarket)); const fails = res.filter(r => r.status === 'rejected').length;
     if (fails === wl.length) throw new Error('keine Marktdaten');
     const prices = priceMap(), acc = B.acc(), src = M.status().source;
-    if (acc.src && acc.src !== src && (acc.pos.length || acc.orders.length)) {   // Quelle gewechselt (Simulator -> Live): alte Positionen sauber schließen
+    if (!acc.mt5 && acc.src && acc.src !== src && (acc.pos.length || acc.orders.length)) {   // Quelle gewechselt (Simulator -> Live): alte Positionen sauber schließen
       for (const p of [...acc.pos]) { const h = B.close(p, p.last, 'Datenquelle gewechselt'); log(`${p.sym}: geschlossen (Datenquelle gewechselt) ${eur(h.pnl)}`, [], 'close', p.sym); } acc.orders = [];
-    } acc.src = src;
+    } if (!acc.mt5) acc.src = src;
     // Broker-Tick: Limit-Fills, Grenzen, Ziele
     for (const e of B.tick(prices)) {
       if (e.type === 'close') { const h = e.h; log(`${h.sym} ${side(h.dir)} geschlossen · ${h.reason} · ${eur(h.pnl)} (${h.R >= 0 ? '+' : ''}${h.R} R)`, [{ n: 'Ausstieg', e: h.reason }], h.pnl >= 0 ? 'win' : 'loss', h.sym);
         NOTIFY({ id: 'close:' + h.id, kind: 'close', pnl: h.pnl, title: `${h.pnl >= 0 ? '🟢' : '🔴'} ${eur(h.pnl)} · ${h.sym} ${h.dir > 0 ? 'BUY' : 'SELL'}`, body: `Geschlossen · ${h.reason} · ${h.R >= 0 ? '+' : ''}${h.R} R`, symbol: h.sym, side: h.dir > 0 ? 'BUY' : 'SELL' }); }
-      if (e.type === 'fill') { log(`${e.p.sym}: Limit-Order ausgeführt @ ${fmt(e.p.sym, e.p.entry)}`, [{ n: 'Broker', e: 'Fill' }], 'open', e.p.sym); NOTIFY({ id: 'open:' + e.p.id, kind: 'open', title: `📈 ${e.p.sym} ${e.p.dir > 0 ? 'BUY' : 'SELL'} ${e.p.lots} @ ${fmt(e.p.sym, e.p.entry)}`, body: `Limit gefüllt · Ziel ${fmt(e.p.sym, e.p.tp)} · Grenze ${fmt(e.p.sym, e.p.sl)}`, symbol: e.p.sym }); }
+      if (e.type === 'fill') { log(`${e.p.sym}: ${B.mode === 'mt5' ? 'MT5 hat ausgeführt' : 'Limit-Order ausgeführt'} · ${side(e.p.dir)} ${e.p.lots} @ ${fmt(e.p.sym, e.p.entry)}`, [{ n: 'Broker', e: 'Fill' }], 'open', e.p.sym); NOTIFY({ id: 'open:' + e.p.id, kind: 'open', title: `📈 ${e.p.sym} ${e.p.dir > 0 ? 'BUY' : 'SELL'} ${e.p.lots} @ ${fmt(e.p.sym, e.p.entry)}`, body: `Limit gefüllt · Ziel ${fmt(e.p.sym, e.p.tp)} · Grenze ${fmt(e.p.sym, e.p.sl)}`, symbol: e.p.sym }); }
+      if (e.type === 'reject') { log(`${e.c.sym}: MT5 hat den Auftrag abgelehnt (${e.c.cmd}) – ${e.error}`, [{ n: 'Broker', e: 'abgelehnt' }], 'skip', e.c.sym); NOTIFY({ id: 'rej:' + e.c.id, kind: 'alert', color: 'red', title: `⚠️ MT5 lehnt ${e.c.sym} ab`, body: e.error }); }
       if (e.type === 'expire') log(`${e.o.sym}: Limit-Order verfallen (Kurs kam nicht zurück)`, [{ n: 'Einstieg', e: 'verfallen' }], 'info', e.o.sym);
     }
     // Scanner + Analyst für alle (Analyst braucht Ausstieg-Management)
@@ -86,7 +91,7 @@ async function cycle() {
     const eq = B.mark(prices), cands = (S.inject || sc.cand).slice(0, 4); S.inject = null; let focus = null, best = -1, acted = null;
     for (const c of cands) {
       const m = S.markets[c.sym], key = c.sym + '|' + c.bar + '|' + c.sig.dir;
-      const a = await analyze(c.sym, c.sig, { cfg: CFG, acc, eq, positions: acc.pos, open: m.open });
+      const a = await analyze(c.sym, c.sig, { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk() });
       if (a.grade > best) { best = a.grade; focus = a; }
       if (S.dup.has(key)) continue;   // dieses Signal (Kerze) wurde schon entschieden
       let decision = null;
@@ -104,11 +109,12 @@ async function cycle() {
       S.dup.add(key); if (S.dup.size > 500) S.dup = new Set([...S.dup].slice(-250));
       if (decision) { a.decision = decision; log(`${c.sym} ${side(c.sig.dir)} (${c.sig.setup}, Note ${a.grade}) – nicht gehandelt: ${decision}`, chips(a), 'skip', c.sym); continue; }
       const pl = a.plan, meta = { grade: a.grade, setup: c.sig.setup, pT: a.tm.mc.pTarget, ev: a.tm.adj.evR };
-      if (a.einstieg.type === 'limit') { const o = B.placeLimit({ sym: c.sym, dir: c.sig.dir, lots: a.budget.lots, limit: pl.entry, sl: pl.stop, tp: pl.target, by: c.sig.setup, plan: pl, meta });
-        a.decision = `Limit-Order #${o.id} gelegt`; log(`${c.sym} ${side(c.sig.dir)} Limit ${fmt(c.sym, pl.entry)} · Ziel ${fmt(c.sym, pl.target)} · Grenze ${fmt(c.sym, pl.stop)} · ${a.budget.lots}`, chips(a), 'order', c.sym); }
-      else { const p = B.open({ sym: c.sym, dir: c.sig.dir, lots: a.budget.lots, sl: pl.stop, tp: pl.target, mid: S.markets[c.sym].price, by: c.sig.setup, plan: pl, meta });
-        a.decision = `Trade #${p.id} eröffnet`; log(`${c.sym} ${side(c.sig.dir)} ${p.lots} @ ${fmt(c.sym, p.entry)} · Ziel ${fmt(c.sym, p.tp)} · Grenze ${fmt(c.sym, p.sl)} · Note ${a.grade}`, chips(a), 'open', c.sym);
-        NOTIFY({ id: 'open:' + p.id, kind: 'open', title: `📈 ${c.sym} ${c.sig.dir > 0 ? 'BUY' : 'SELL'} ${p.lots} @ ${fmt(c.sym, p.entry)}`, body: `${c.sig.setup} · Ziel ${fmt(c.sym, p.tp)} · Grenze ${fmt(c.sym, p.sl)} · Note ${a.grade}/100`, symbol: c.sym, side: c.sig.dir > 0 ? 'BUY' : 'SELL' }); }
+      if (a.einstieg.type === 'limit') { const o = B.placeLimit({ riskEur: a.budget.riskEur, sym: c.sym, dir: c.sig.dir, lots: a.budget.lots, limit: pl.entry, sl: pl.stop, tp: pl.target, by: c.sig.setup, plan: pl, meta });
+        a.decision = o.queued ? `Limit-Order an MT5 gesendet (${o.id})` : `Limit-Order #${o.id} gelegt`; log(`${c.sym} ${side(c.sig.dir)} Limit ${fmt(c.sym, pl.entry)} · Ziel ${fmt(c.sym, pl.target)} · Grenze ${fmt(c.sym, pl.stop)} · ${a.budget.lots}`, chips(a), 'order', c.sym); }
+      else { const p = B.open({ riskEur: a.budget.riskEur, sym: c.sym, dir: c.sig.dir, lots: a.budget.lots, sl: pl.stop, tp: pl.target, mid: S.markets[c.sym].price, by: c.sig.setup, plan: pl, meta });
+        if (p.queued) { a.decision = `Order an MT5 gesendet (${p.id})`; log(`${c.sym} ${side(c.sig.dir)} an MT5 gesendet · Risiko ${a.budget.riskEur.toFixed(2)} € · Ziel ${fmt(c.sym, p.tp)} · Grenze ${fmt(c.sym, p.sl)} · Note ${a.grade}`, chips(a), 'order', c.sym); }
+        else { a.decision = `Trade #${p.id} eröffnet`; log(`${c.sym} ${side(c.sig.dir)} ${p.lots} @ ${fmt(c.sym, p.entry)} · Ziel ${fmt(c.sym, p.tp)} · Grenze ${fmt(c.sym, p.sl)} · Note ${a.grade}`, chips(a), 'open', c.sym);
+        NOTIFY({ id: 'open:' + p.id, kind: 'open', title: `📈 ${c.sym} ${c.sig.dir > 0 ? 'BUY' : 'SELL'} ${p.lots} @ ${fmt(c.sym, p.entry)}`, body: `${c.sig.setup} · Ziel ${fmt(c.sym, p.tp)} · Grenze ${fmt(c.sym, p.sl)} · Note ${a.grade}/100`, symbol: c.sym, side: c.sig.dir > 0 ? 'BUY' : 'SELL' }); } }
       setH('broker', { s: 'done', t: a.decision }); acted = a;
     }
     if (acted) focus = acted;   // ausgeführter Trade hat Vorrang im Dashboard
@@ -147,10 +153,10 @@ function addAlarm(b) { const sym = String(b.sym || '').toUpperCase(), price = +b
   ALARMS.push(a); ALARMS = ALARMS.slice(-50); persist(); return a; }
 function delAlarm(id) { ALARMS = ALARMS.filter(a => a.id !== id); persist(); }
 // ---------- Steuerung ----------
-function closeAll(reason = 'Manuell geschlossen') { const acc = B.acc(), out = []; for (const p of [...acc.pos]) { const m = S.markets[p.sym]; out.push(B.close(p, m ? m.price : p.last, reason)); } acc.orders = []; B.save(); out.forEach(h => log(`${h.sym}: ${reason} · ${eur(h.pnl)}`, [], h.pnl >= 0 ? 'win' : 'loss', h.sym)); return out; }
-function closeOne(id) { const acc = B.acc(), p = acc.pos.find(x => x.id === +id); if (!p) { const o = acc.orders.find(x => x.id === +id); if (o) { acc.orders = acc.orders.filter(x => x !== o); B.save(); log(`${o.sym}: Limit-Order gelöscht`, [], 'info', o.sym); return { cancelled: o.id }; } throw new Error('nicht gefunden'); }
+function closeAll(reason = 'Manuell geschlossen') { const acc = B.acc(), out = []; for (const p of [...acc.pos]) { const m = S.markets[p.sym]; out.push(B.close(p, m ? m.price : p.last, reason)); } if (B.mode === 'mt5') acc.orders.forEach(o => MT5.cancel(o)); else acc.orders = []; B.save(); out.forEach(h => log(`${h.sym}: ${reason} · ${eur(h.pnl)}`, [], h.pnl >= 0 ? 'win' : 'loss', h.sym)); return out; }
+function closeOne(id) { const acc = B.acc(), p = acc.pos.find(x => x.id === +id); if (!p) { const o = acc.orders.find(x => x.id === +id); if (o) { if (B.mode === 'mt5') { MT5.cancel(o); log(`${o.sym}: Löschung der MT5-Order angefordert`, [], 'info', o.sym); return { cancelled: o.id }; } acc.orders = acc.orders.filter(x => x !== o); B.save(); log(`${o.sym}: Limit-Order gelöscht`, [], 'info', o.sym); return { cancelled: o.id }; } throw new Error('nicht gefunden'); }
   const h = B.close(p, S.markets[p.sym] ? S.markets[p.sym].price : p.last, 'Manuell geschlossen'); log(`${h.sym}: manuell geschlossen · ${eur(h.pnl)}`, [], h.pnl >= 0 ? 'win' : 'loss', h.sym); return h; }
-function resetAccount(bal) { const b = U.clamp(+bal || CFG.startBalance, 100, 1e7); CFG.startBalance = b; persist(); B.reset(b); S.dup = new Set(); log(`Paper-Konto zurückgesetzt auf ${b.toLocaleString('de-DE')} €`, [], 'cfg'); }
+function resetAccount(bal) { if (B.mode === 'mt5') throw new Error('Im MT5-Modus wird das Demo-Konto beim Broker zurückgesetzt, nicht hier'); const b = U.clamp(+bal || CFG.startBalance, 100, 1e7); CFG.startBalance = b; persist(); B.reset(b); S.dup = new Set(); log(`Paper-Konto zurückgesetzt auf ${b.toLocaleString('de-DE')} €`, [], 'cfg'); }
 
 // ---------- Snapshot fürs Dashboard ----------
 function snapshot() {
@@ -158,7 +164,7 @@ function snapshot() {
   const curve = acc.curve.length > 400 ? acc.curve.filter((_, i, a) => i % Math.ceil(a.length / 400) === 0 || i === a.length - 1) : acc.curve;
   const f = S.focus && { ...S.focus, tm: { ...S.focus.tm, mc: { ...S.focus.tm.mc } } };
   return { gen: S.gen, engine: { cycle: S.cycle, last: S.last, ms: S.lastMs, intervalS: CFG.intervalS, error: S.error, running: RUNNING, started: S.started, watch: wl.length, ai: AI.available(), aiModel: AI.available() ? AI.MODEL : null },
-    data: M.status(), cfg: CFG, helpers: S.helpers, meta: H.META,
+    data: M.status(), cfg: CFG, broker: { mode: B.mode === 'mt5' ? 'mt5' : 'paper', mt5: MT5.status() }, helpers: S.helpers, meta: H.META,
     acc: { start: acc.start, balance: U.round(acc.balance, 2), equity: U.round(eq, 2), today: U.round(today, 2), week: st.week, month: st.month, total: U.round(eq - acc.start, 2), stats: st, curve, open: acc.pos.length },
     pos: acc.pos.map(p => ({ id: p.id, sym: p.sym, dir: p.dir, lots: p.lots, entry: p.entry, sl: p.sl, tp: p.tp, sl0: p.sl0, open: p.open, upnl: p.upnl, last: p.last, by: p.by, be: p.be, dp: I.get(p.sym).dp, R: U.round(p.dir * (p.last - p.entry) / Math.abs(p.entry - p.sl0), 2), meta: p.meta })),
     orders: acc.orders.map(o => ({ id: o.id, sym: o.sym, dir: o.dir, lots: o.lots, limit: o.limit, sl: o.sl, tp: o.tp, expires: o.expires, by: o.by, dp: I.get(o.sym).dp })),
@@ -166,10 +172,11 @@ function snapshot() {
     scanner: S.scanner, focus: f, journal: S.journal.slice(0, 60), alarms: ALARMS.filter(a => !a.done), alarmLog: S.alarmLog.slice(0, 20), kongress: { ...K.state(), latest: K.latest(12) } };
 }
 function start({ notify } = {}) {
-  if (notify) NOTIFY = notify; B.load(CFG.startBalance); RUNNING = true;
+  if (notify) NOTIFY = notify; useBroker(); RUNNING = true;
   H.META.forEach(([k]) => setH(k, { s: 'idle', t: 'startet …' }));
   const loop = async () => { await cycle(); if (RUNNING) TIMER = setTimeout(loop, CFG.intervalS * 1000); };
   loop(); return module.exports;
 }
 function stop() { RUNNING = false; clearTimeout(TIMER); }
-module.exports = { _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };
+const mt5Sync = b => { const r = MT5.sync(b, priceMap()); return r; };
+module.exports = { mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };
