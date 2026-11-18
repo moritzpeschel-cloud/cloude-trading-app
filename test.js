@@ -4,7 +4,7 @@ const PORT = 3999, B = `http://127.0.0.1:${PORT}`;
 const http = require('http'), crypto = require('crypto'), os = require('os'), path = require('path');
 const TMP = require('fs').mkdtempSync(path.join(os.tmpdir(), 'ct-test-'));
 const srv = spawn(process.execPath, ['server.js'], { cwd: __dirname, env: { ...process.env, PORT, API_TOKEN: 'push-test-token', VIEW_PIN: '24681357', PUSH_ALLOW_HTTP_ENDPOINTS: '1',
-  SUBS_FILE: path.join(TMP, 's.json'), EVENTS_FILE: path.join(TMP, 'e.json'), VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '' }, stdio: 'ignore' });
+  SUBS_FILE: path.join(TMP, 's.json'), DATA_SOURCE: 'sim', DATA_DIR: path.join(TMP, 'skill'), ANTHROPIC_API_KEY: '', EVENTS_FILE: path.join(TMP, 'e.json'), VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '' }, stdio: 'ignore' });
 // Empfänger wie ein Push-Dienst: prüft VAPID-JWT (ES256) und entschlüsselt aes128gcm (RFC 8291) mit dem Geräte-Schlüssel
 const ua = crypto.createECDH('prime256v1'); ua.generateKeys(); const AUTH = crypto.randomBytes(16), GOT = [];
 const H = (k, d) => crypto.createHmac('sha256', k).update(d).digest();
@@ -67,6 +67,25 @@ const j = (p, o = {}) => fetch(B + p, { ...o, headers: { 'Content-Type': 'applic
     const n0 = GOT.length, tr = await (await j('/api/notify/test', { method: 'POST', body: '{}', headers: S })).json(); assert.equal(tr.push.sent, 1); assert.equal(GOT.length, n0 + 1); assert.equal(tr.telegram, 'angefragt');
     const tq = (await (await j('/api/prefs', { headers: P })).json()).test; assert.ok(tq.id); await j('/api/prefs/ack', { method: 'POST', body: JSON.stringify({ id: tq.id }), headers: P });
     assert.equal((await (await j('/api/prefs', { headers: P })).json()).test, null);
+    // ---- Trader-Skill-API (Engine im Server)
+    assert.equal((await j('/api/skill')).status, 401);
+    for (let i = 0; i < 80 && !(await (await j('/api/skill', { headers: S })).json()).engine.last; i++) await new Promise(r => setTimeout(r, 100));
+    const sk = await (await j('/api/skill', { headers: S })).json(); assert.equal(sk.meta.length, 11); assert.ok(sk.engine.cycle >= 1); assert.equal(sk.data.source, 'sim');
+    assert.equal((await (await j('/api/skill', { headers: P })).json()).meta.length, 11);   // Bot-Token (CLI) darf lesen
+    const an = await (await j('/api/skill/analyze?sym=XAUUSD', { headers: S })).json(); assert.equal(an.sym, 'XAUUSD'); assert.ok(an.chart.bars.length > 100); assert.equal(an.tm.mc.n, 10000);
+    assert.equal((await j('/api/skill/analyze?sym=XXX', { headers: S })).status, 400);
+    assert.equal((await j('/api/skill/config', { method: 'POST', body: '{"riskPct":1}' })).status, 401);
+    assert.equal((await (await j('/api/skill/config', { method: 'POST', body: '{"riskPct":1.25,"evil":1}', headers: S })).json()).cfg.riskPct, 1.25);
+    assert.equal((await (await j('/api/skill/control', { method: 'POST', body: '{"action":"kill_on"}', headers: S })).json()).cfg.kill, true);
+    assert.equal((await j('/api/skill/control', { method: 'POST', body: '{"action":"rm -rf"}', headers: S })).status, 400);
+    assert.equal((await j('/api/skill/alarm', { method: 'POST', body: '{"sym":"EURUSD","price":2}', headers: S })).status, 200);
+    assert.equal((await (await j('/api/skill', { headers: S })).json()).alarms.length, 1);
+    const csp = (await fetch(B + '/')).headers.get('content-security-policy'); assert.ok(csp.includes("script-src 'self'"));
+    for (const f of ['/app.js', '/charts.js', '/robots.js', '/style.css', '/sw.js', '/icons/icon-192.png']) assert.equal((await fetch(B + f)).status, 200, f);
+    assert.ok(!(await (await fetch(B + '/bot/engine.js')).text()).includes('module.exports'), 'Server-Code nie ausliefern');
+    const mp = await (await fetch(B + '/mp/')).text(); assert.ok(mp.includes('MP Trading') && mp.includes('id="bpriv"'), 'MP-Dashboard (eigene index.html) unter /mp/');
+    assert.equal((await fetch(B + '/mp/api/state', { headers: S })).status, 200, '/mp/api -> /api');
+    assert.equal((await fetch(B + '/mp/icons/icon-192.png')).status, 200);
     console.log('cloud_app: alle Tests bestanden');
   } catch (e) { console.error('FEHLER', e.message); process.exitCode = 1; } finally { srv.kill(); PS.close(); }
 })();

@@ -1,8 +1,8 @@
 // App-Hülle: NETWORK-FIRST (immer aktuelle Version vom Server, Cache nur als Offline-Notnagel). /api/* wird nie gecacht.
 // Neue Version wird sofort aktiv (skipWaiting + clients.claim), alte Caches werden gelöscht. Bei jeder Änderung V hochzählen.
-const V='ct-v10',SHELL=['./','index.html','style.css','app.js','globe.js','manifest.webmanifest','icons/icon-192.png','icons/apple-touch-icon.png'];
+const V='mp-v10',SHELL=['./','index.html','style.css','app.js','globe.js','manifest.webmanifest','icons/icon-192.png','icons/apple-touch-icon.png'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(V).then(c=>Promise.all(SHELL.map(u=>fetch(u,{cache:'no-store'}).then(r=>r.ok&&c.put(u,r)).catch(()=>{})))))});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k.startsWith('mp-')).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('message',e=>{if(e.data==='skipWaiting')self.skipWaiting()});
 self.addEventListener('fetch',e=>{const q=e.request,u=new URL(q.url);if(q.method!=='GET'||u.origin!==location.origin||u.pathname.includes('/api/')||u.pathname==='/healthz')return;
  const nav=q.mode==='navigate'||(q.headers.get('accept')||'').includes('text/html');
