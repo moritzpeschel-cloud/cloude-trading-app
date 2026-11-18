@@ -23,6 +23,10 @@ let PX = {}; const bridge = (extra = {}) => execFileSync('python3', [path.join(_
     PX = await ctl('/prices');
     // Echtgeld-Konto wird abgelehnt
     let blocked = false; try { bridge({ FAKE_MODE: '2' }); } catch (e) { blocked = /KEIN Demo-Konto/.test(e.stdout + e.stderr); } assert.ok(blocked, 'Echtgeld verweigert');
+    // Diagnose: falscher Token / MT5-Login-Fehler landen im Dashboard
+    await fetch(B + '/api/mt5/poll', { headers: { Authorization: 'Bearer falsch' } }); let d = (await ctl('/cycle')).broker.mt5.diag; assert.ok(d.authFail, 'Token-Fehler sichtbar');
+    try { execFileSync('python3', [path.join(__dirname, 'mt5_bridge/bridge.py')], { timeout: 4000, env: { ...process.env, PYTHONPATH: FAKE, CT_URL: B, CT_TOKEN: TOK, FAKE_STATE: STATE, FAKE_INIT_FAIL: '1' } }); } catch (_) {}
+    d = (await ctl('/cycle')).broker.mt5.diag; assert.match(d.bridgeError || '', /Login fehlgeschlagen/, 'MT5-Login-Fehler sichtbar'); assert.ok(!d.authFail, 'Token jetzt ok');
     let out = bridge(); assert.match(out, /Demo-Konto 5551234/); assert.match(out, /US500→US500\.cash/); assert.match(out, /NAS100→USTEC/);
     let s = await ctl('/cycle'); assert.equal(s.broker.mode, 'mt5'); assert.ok(s.broker.mt5.connected, 'Brücke verbunden'); assert.ok(Math.abs(s.broker.mt5.offset.ETHUSD - 1.5) < .01, 'Kurs-Versatz erkannt');
     // Signal -> Befehl -> Brücke führt aus -> Position im Dashboard

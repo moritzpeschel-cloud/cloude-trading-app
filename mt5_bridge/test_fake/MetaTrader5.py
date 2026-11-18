@@ -13,9 +13,9 @@ def _l():
     try: return json.load(open(F))
     except Exception: return {"seq": 1000, "pos": [], "ord": [], "deals": [], "bal": 10000.0}
 def _s(s): json.dump(s, open(F, "w"))
-def initialize(**k): return True
+def initialize(**k): return not os.environ.get("FAKE_INIT_FAIL")
 def shutdown(): pass
-def last_error(): return (0, "ok")
+def last_error(): return (-6, "Terminal: Authorization failed") if os.environ.get("FAKE_INIT_FAIL") else (0, "ok")
 def account_info():
     s = _l(); eq = s["bal"] + sum(_profit(p) for p in s["pos"])
     return N(login=5551234, server="Demo-Server", company="FakeBroker", currency="EUR", balance=s["bal"], equity=eq, leverage=100, trade_mode=int(os.environ.get("FAKE_MODE", "0")))

@@ -184,4 +184,4 @@ const mt5Sync = b => { const r = MT5.sync(b, priceMap());
     log(`MT5-Brücke verbunden – der Bot handelt ab jetzt im Demo-Konto ${a.login || ''} (${a.server || ''})`, [{ n: 'Broker', e: 'MT5-Demo' }], 'cfg');
     NOTIFY({ id: 'mt5on:' + (a.login || '') + ':' + U.berlin().date, kind: 'alert', color: 'green', title: '🔌 MT5-Demo verbunden', body: `Konto ${a.login || ''} · ${a.server || ''} – der Bot handelt jetzt dort` }); }
   return r; };
-module.exports = { mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };
+module.exports = { mt5Note: o => MT5.note(o), mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };

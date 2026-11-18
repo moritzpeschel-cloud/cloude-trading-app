@@ -208,30 +208,82 @@ def report(magic, results):
     return {"account": acc, "positions": pos, "orders": ords, "closed": closed, "prices": prices, "results": results}
 
 
+VERSION = "1.1"
+
+
+def hint(code):
+    if code in (-6,):
+        return "Login fehlgeschlagen – Kontonummer/Passwort/Server prüfen (Server: MetaQuotes-Demo)"
+    if code in (-10003, -10004, -10005, -1, -10001, -10002):
+        return "MT5-Terminal nicht gefunden oder nicht gestartet – MetaTrader 5 (Desktop) öffnen; bei mehreren Installationen MT5_PATH auf terminal64.exe setzen"
+    return "MT5 meldet einen Fehler"
+
+
+def hello(error=None):
+    try:
+        http("/api/mt5/hello", {"error": error, "version": VERSION})
+    except Exception:
+        pass
+
+
+def server_check():
+    """Wartet, bis der Server erreichbar ist und der Token stimmt."""
+    n = 0
+    while True:
+        n += 1
+        try:
+            return http("/api/mt5/poll")
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                log("❌ CT_TOKEN ist falsch. In START.bat genau den API_TOKEN aus Render eintragen (Render → Service → Environment).")
+            elif e.code == 404:
+                log("❌ Der Server kennt die Brücke noch nicht (alte Version). In Render: Manual Deploy → Deploy latest commit.")
+            else:
+                log(f"❌ Server antwortet mit HTTP {e.code}.")
+            time.sleep(60)
+        except Exception as e:
+            log(f"⏳ Server noch nicht erreichbar ({e.__class__.__name__}) – Render wacht evtl. gerade auf. Neuer Versuch in 15 s … (Versuch {n})")
+            time.sleep(15)
+
+
 def connect():
+    """Verbindet mit dem MT5-Terminal; versucht es bei Fehlern alle 30 s erneut und meldet den Grund ans Dashboard."""
     kw = {}
     if os.environ.get("MT5_PATH"):
         kw["path"] = os.environ["MT5_PATH"]
     if os.environ.get("MT5_LOGIN"):
         kw.update(login=int(os.environ["MT5_LOGIN"]), password=os.environ.get("MT5_PASSWORD", ""), server=os.environ.get("MT5_SERVER", ""))
-    if not mt5.initialize(**kw):
-        sys.exit(f"MT5 nicht erreichbar: {mt5.last_error()} – Terminal gestartet und eingeloggt?")
-    a = mt5.account_info()
-    if a is None:
-        sys.exit("Kein Konto im Terminal eingeloggt.")
+    while True:
+        if mt5.initialize(**kw):
+            a = mt5.account_info()
+            if a is not None:
+                break
+            msg = "Im Terminal ist kein Konto eingeloggt"
+        else:
+            code, txt = mt5.last_error()
+            msg = f"{hint(code)} (Code {code}: {txt})"
+        log("⚠ " + msg + " – neuer Versuch in 30 s")
+        hello(msg)
+        mt5.shutdown()
+        time.sleep(30)
     if a.trade_mode != mt5.ACCOUNT_TRADE_MODE_DEMO:
+        hello("Eingeloggtes Konto ist KEIN Demo-Konto – Brücke gestoppt")
         mt5.shutdown()
         sys.exit("ABBRUCH: Das eingeloggte Konto ist KEIN Demo-Konto. Diese Brücke handelt ausschließlich Demo-Konten.")
     if not mt5.terminal_info().trade_allowed:
         log("⚠ Im Terminal ist Algo-Trading AUS – oben in MT5 auf „Algo Trading“ klicken, sonst werden Orders abgelehnt.")
-    log(f"Verbunden: Demo-Konto {a.login} · {a.server} · {a.balance:.2f} {a.currency}")
+        hello("Algo-Trading im MT5-Terminal ist AUS – oben auf „Algo Trading“ klicken")
+    log(f"✅ Verbunden: Demo-Konto {a.login} · {a.server} · {a.balance:.2f} {a.currency}")
 
 
 def main():
-    if not URL or not TOKEN:
-        sys.exit("Bitte CT_URL (Server-Adresse) und CT_TOKEN (API_TOKEN) setzen.")
+    if not URL or not TOKEN or "HIER_" in TOKEN:
+        sys.exit("Bitte CT_URL (Server-Adresse) und CT_TOKEN (API_TOKEN aus Render) setzen.")
+    log(f"Cloude Trading MT5-Brücke {VERSION} · Server {URL}")
+    first = server_check()
+    log("✅ Server erreichbar, Token stimmt.")
+    hello(None)
     connect()
-    first = http("/api/mt5/poll")
     magic = first["magic"]
     resolve(first.get("watch", list(ALIASES)))
     results, done, fails = [], {}, 0
@@ -251,8 +303,15 @@ def main():
             resp = http("/api/mt5/sync", report(magic, results))
             if resp.get("ok") is False:
                 sys.exit("Server: " + str(resp.get("error")))
+            if fails:
+                log("✅ Wieder mit dem Server verbunden.")
             results, cmds, fails = [], resp.get("cmds", []), 0
             done = {k: v for k, v in done.items() if time.time() - v < 900}
+        except urllib.error.HTTPError as e:
+            fails += 1
+            log(f"Server-Fehler HTTP {e.code} – {'CT_TOKEN falsch' if e.code == 401 else 'neuer Versuch'} (Versuch {fails})")
+            time.sleep(min(60, INTERVAL * fails))
+            continue
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             fails += 1
             log(f"Server nicht erreichbar ({e}) – Versuch {fails}, Ergebnisse bleiben gespeichert")
