@@ -1,56 +1,154 @@
 <!doctype html>
-<html lang="de"><head>
+<html lang="de" data-theme="dark"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#03050b">
+<meta name="theme-color" content="#07080c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Cloude Trading">
+<meta name="apple-mobile-web-app-title" content="MP Trading">
 <meta name="referrer" content="no-referrer">
-<title>Cloude Trading</title>
+<meta name="format-detection" content="telephone=no">
+<title>MP Trading Dashboard</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="style.css">
 </head><body>
+<svg width="0" height="0" class="defs" aria-hidden="true"><defs>
+ <linearGradient id="gAcc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+ <symbol id="i-logo" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="9" fill="url(#gAcc)"/><path d="M7 21.5l5-6 4 3.5 6.5-8.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23" cy="10.5" r="2.2" fill="#fff"/></symbol>
+ <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+ <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+ <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+ <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+ <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="19" cy="12" r="1.9" fill="currentColor"/></symbol>
+ <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+ <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7c1.9 0 3.5-.6 4.9-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+ <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+ <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+ <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v12M6 11l6 6 6-6M5 20h14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+ <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+ <symbol id="i-dn" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
 <div id="lock" class="lock hidden">
   <div class="lockbox">
-    <div class="logo"><img src="icons/icon-192.png" alt=""></div>
-    <h1>Cloude Trading</h1>
+    <svg class="lklogo"><use href="#i-logo"/></svg>
+    <h1>MP Trading</h1>
     <p>Gib einmalig deine Ansichts-PIN ein. Das Gerät bleibt 180 Tage angemeldet – die PIN selbst wird nicht gespeichert.</p>
-    <form id="pwf"><input id="pw" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Ansichts-PIN" required><button id="pwb">Entsperren</button></form>
+    <form id="pwf"><input id="pw" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••••" required><button id="pwb" class="btn pri">Entsperren</button></form>
     <div id="pwmsg" class="msg"></div>
   </div>
 </div>
+
 <div id="app" class="hidden">
-  <header><div class="title"><span class="lg">◆</span> Cloude Trading</div><div class="age" id="age">–</div></header>
-  <div class="chips" id="chips"></div>
-  <div class="ringwrap"><div class="ring" id="ring"><div class="globebox"><canvas id="globe"></canvas></div><div id="cards"></div></div></div>
-  <div class="agdet" id="agdet"></div>
-  <div class="accbar" id="acc"></div>
-  <nav class="tabs" id="tabs"><a href="#s-by">Trades gesetzt von</a><a href="#s-wk">Wochen-Report</a><a href="#s-pos">Positionen</a><a href="#s-ctl">Steuerung</a><a href="#s-set">Einstellungen</a><a href="#s-dec">Journal</a></nav>
-  <div class="grid">
-  <section id="s-by" class="card wide"><h2>Trades gesetzt von <small>welcher Helfer / welche Strategie</small></h2><div class="bysum" id="bysum"></div><div class="filt" id="byf"></div><div id="bylist"></div></section>
-  <section id="s-wk" class="card wide"><h2>Wochen-Report <small id="wkr">laufende Woche · Telegram So 20:00 und /woche</small></h2><div id="wk"></div></section>
-  <section id="s-pos" class="card"><h2>Offene Positionen</h2><div id="pos"></div><h2 class="h2b">Letzte Trades</h2><div id="hist"></div></section>
-  <section id="s-ctl" class="card"><h2>Steuerung <small>per Telegram</small></h2><div class="ctl" id="ctl"></div><p class="hint">Die App ist nur lesend. Die Knöpfe öffnen den Telegram-Bot mit dem Befehl – dort auf „Starten“ tippen. Antworten gibt es nur in deinem Chat.</p></section>
-  <section id="s-set" class="card"><h2>Einstellungen <small>Mitteilungen</small></h2>
-    <div class="set">
-      <div class="srow"><div><b>Web-Push auf diesem Gerät</b><div class="sub">Status: <span id="pstat">–</span></div></div><div class="pbtn" id="pbox"></div></div>
-      <p class="hint" id="pinfo"></p>
-      <label class="srow"><div><b>Bei Trade-Eröffnung</b><div class="sub">Symbol, BUY/SELL, Lot, Einstieg, SL/TP</div></div><input type="checkbox" class="tg" data-k="open"><i class="sw"></i></label>
-      <label class="srow"><div><b>Bei Trade-Schließung</b><div class="sub">🟢 Gewinn / 🔴 Verlust in €</div></div><input type="checkbox" class="tg" data-k="close"><i class="sw"></i></label>
-      <label class="srow"><div><b>Telegram</b><div class="sub">@moritz_goldtrading_bot</div></div><input type="checkbox" class="tg" data-k="telegram"><i class="sw"></i></label>
-      <label class="srow"><div><b>Web-Push (alle Geräte)</b><div class="sub">Mitteilungen in dieser App</div></div><input type="checkbox" class="tg" data-k="push"><i class="sw"></i></label>
-      <div class="srow"><div class="sub" id="prefmsg">Einstellungen werden im Bot gespeichert.</div><button class="ghost sm" id="ptest">Test-Mitteilung senden</button></div>
+  <div id="ptr" class="ptr"><svg><use href="#i-refresh"/></svg></div>
+  <header class="top">
+    <div class="brand"><svg class="lg"><use href="#i-logo"/></svg><div class="bt"><b>MP Trading</b><span class="live"><i id="ldot"></i><span id="age">–</span></span></div></div>
+    <div class="acts">
+      <button class="ib" id="bpriv" aria-label="Beträge verbergen"><svg><use href="#i-eye"/></svg></button>
+      <button class="ib" id="brefresh" aria-label="Aktualisieren"><svg><use href="#i-refresh"/></svg></button>
     </div>
-    <h2 class="h2b">Letzte Mitteilungen</h2><div id="evs"></div></section>
-  <section id="s-dec" class="card wide"><h2>Journal <small>letzte Entscheidungen</small></h2><div id="dec"></div></section>
-  </div>
-  <footer><span id="foot">–</span> · <a href="#" id="logout">Gerät abmelden</a></footer>
+  </header>
+  <div id="banner"></div>
+
+  <main>
+  <!-- ================= Übersicht ================= -->
+  <section class="view" id="v-home">
+    <div class="hero">
+      <div class="hero-top"><span class="lbl">Equity</span><span class="tag" id="hmode">–</span></div>
+      <div class="big m" id="heq">–</div>
+      <div class="hero-sub"><span>Kontostand <b class="m" id="hbal">–</b></span><span>Offen <b class="m" id="hflt">–</b></span></div>
+      <div class="periods" id="periods"></div>
+      <div class="chartbox">
+        <div class="ctip" id="ctip"></div>
+        <div class="chart" id="chart"></div>
+      </div>
+      <div class="crow">
+        <div class="seg xs" id="ctype"><button data-v="pl">P/L</button><button data-v="eq">Equity</button></div>
+        <div class="seg xs" id="crange"><button data-v="1d">1T</button><button data-v="7d">1W</button><button data-v="30d">1M</button><button data-v="all">Alle</button></div>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="card"><div class="ch"><h3>Offene Positionen <span class="cnt" id="poscnt"></span></h3></div><div id="pos"></div></div>
+    <div class="card"><div class="ch"><h3>Letzte Trades</h3><button class="lnk" data-go="trades">Alle ›</button></div><div id="hist"></div></div>
+    <div class="card"><div class="ch"><h3>Helfer-Aktivität</h3><button class="lnk" data-go="agents">Globus ›</button></div><div id="agmini"></div></div>
+  </section>
+
+  <!-- ================= Trades ================= -->
+  <section class="view" id="v-trades">
+    <div class="vh"><h2>Trades</h2><button class="btn ghost sm" id="bexport"><svg><use href="#i-down"/></svg>CSV</button></div>
+    <label class="search"><svg><use href="#i-search"/></svg><input id="q" type="search" placeholder="Symbol oder Strategie suchen" autocomplete="off"></label>
+    <div class="seg" id="tfilt"><button data-v="all">Alle</button><button data-v="open">Offen</button><button data-v="win">Gewinn</button><button data-v="loss">Verlust</button></div>
+    <div class="ch sub"><h3>Gesetzt von</h3><small>tippen zum Filtern</small></div>
+    <div class="hscroll" id="bysum"></div>
+    <div class="tsum" id="tsum"></div>
+    <div id="tlist"></div>
+  </section>
+
+  <!-- ================= Helfer ================= -->
+  <section class="view" id="v-agents">
+    <div class="vh"><h2>Helfer</h2><span class="vsub" id="agsum"></span></div>
+    <div class="stage">
+      <div class="ring" id="ring"><div class="globebox"><canvas id="globe"></canvas></div><div id="cards"></div></div>
+    </div>
+    <div class="agdet" id="agdet"></div>
+    <div class="card"><div class="ch"><h3>Journal</h3><small>letzte Entscheidungen</small></div><div id="dec"></div></div>
+  </section>
+
+  <!-- ================= Analyse ================= -->
+  <section class="view" id="v-stats">
+    <div class="vh"><h2>Analyse</h2></div>
+    <div class="card"><div class="ch"><h3>Wochen-Report</h3><small id="wkr">laufende Woche</small></div><div id="wk"></div></div>
+    <div class="card"><div class="ch"><h3>P/L-Kalender</h3><small>letzte 5 Wochen</small></div><div id="cal"></div><div class="calinfo" id="calinfo"></div></div>
+    <div class="card"><div class="ch"><h3>Kennzahlen</h3><small>alle geschlossenen Trades</small></div><div class="sgrid" id="kstats"></div></div>
+    <div class="card"><div class="ch"><h3>Long vs. Short</h3></div><div id="ls"></div></div>
+    <div class="card"><div class="ch"><h3>Nach Symbol</h3></div><div id="bysym"></div></div>
+    <div class="card"><div class="ch"><h3>Nach Uhrzeit</h3><small>P/L je Stunde (Berlin)</small></div><div id="byhour"></div></div>
+  </section>
+
+  <!-- ================= Mehr ================= -->
+  <section class="view" id="v-more">
+    <div class="vh"><h2>Mehr</h2></div>
+    <div class="card"><div class="ch"><h3>Steuerung</h3><small>per Telegram</small></div><div class="ctl" id="ctl"></div>
+      <p class="hint">Die App ist nur lesend. Die Knöpfe öffnen den Telegram-Bot mit dem Befehl – dort auf „Starten“ tippen.</p></div>
+    <div class="card"><div class="ch"><h3>Darstellung</h3></div>
+      <div class="set">
+        <div class="srow"><div><b>Design</b><div class="sub">Hell, Dunkel oder wie das iPhone</div></div><div class="seg xs" id="theme"><button data-v="auto">Auto</button><button data-v="dark">Dunkel</button><button data-v="light">Hell</button></div></div>
+        <label class="srow"><div><b>Privatmodus</b><div class="sub">Beträge verbergen (auch über das Auge oben)</div></div><input type="checkbox" class="ltg" data-k="priv"><i class="sw"></i></label>
+        <label class="srow"><div><b>Kurs-Animationen</b><div class="sub">Zahlen zählen hoch, Globus-Strahlen</div></div><input type="checkbox" class="ltg" data-k="anim"><i class="sw"></i></label>
+        <div class="srow"><div><b>Tagesziel</b><div class="sub">Fortschritt auf der Übersicht</div></div><div class="goal"><input id="goal" type="number" inputmode="decimal" min="0" step="1" placeholder="z. B. 50"><span>€</span></div></div>
+      </div>
+    </div>
+    <div class="card"><div class="ch"><h3>Mitteilungen</h3></div>
+      <div class="set">
+        <div class="srow"><div><b>Web-Push auf diesem Gerät</b><div class="sub">Status: <span id="pstat">–</span></div></div><div class="pbtn" id="pbox"></div></div>
+        <p class="hint" id="pinfo"></p>
+        <label class="srow"><div><b>Bei Trade-Eröffnung</b><div class="sub">Symbol, BUY/SELL, Lot, Einstieg, SL/TP</div></div><input type="checkbox" class="tg" data-k="open"><i class="sw"></i></label>
+        <label class="srow"><div><b>Bei Trade-Schließung</b><div class="sub">🟢 Gewinn / 🔴 Verlust in €</div></div><input type="checkbox" class="tg" data-k="close"><i class="sw"></i></label>
+        <label class="srow"><div><b>Telegram</b><div class="sub">@moritz_goldtrading_bot</div></div><input type="checkbox" class="tg" data-k="telegram"><i class="sw"></i></label>
+        <label class="srow"><div><b>Web-Push (alle Geräte)</b><div class="sub">Mitteilungen in dieser App</div></div><input type="checkbox" class="tg" data-k="push"><i class="sw"></i></label>
+        <div class="srow"><div class="sub" id="prefmsg">Einstellungen werden im Bot gespeichert.</div><button class="btn ghost sm" id="ptest">Test senden</button></div>
+      </div>
+    </div>
+    <div class="card"><div class="ch"><h3>Letzte Mitteilungen</h3></div><div id="evs"></div></div>
+    <div class="card about"><div id="foot">–</div><button class="btn danger" id="logout">Gerät abmelden</button><div class="ver">MP Trading Dashboard · v2.0</div></div>
+  </section>
+  </main>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-v="home"><svg><use href="#i-home"/></svg><span>Übersicht</span></button>
+    <button data-v="trades"><svg><use href="#i-list"/></svg><span>Trades</span></button>
+    <button data-v="agents" class="mid"><i><svg><use href="#i-globe"/></svg></i><span>Helfer</span></button>
+    <button data-v="stats"><svg><use href="#i-chart"/></svg><span>Analyse</span></button>
+    <button data-v="more"><svg><use href="#i-more"/></svg><span>Mehr</span></button>
+  </nav>
   <svg id="beams"></svg>
 </div>
+
+<div id="sheet" class="sheet" hidden><div class="sheet-bd" id="sheetbd"></div><div class="sheet-pn" id="sheetpn"><i class="grab"></i><div id="sheetc"></div></div></div>
 <div id="toast" class="toast" hidden></div>
 <script src="globe.js"></script>
 <script src="app.js"></script>
