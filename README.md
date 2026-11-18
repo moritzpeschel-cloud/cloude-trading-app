@@ -4,6 +4,17 @@ Kleine Web-App (PWA) für das iPhone: Globus mit 12 Helfern, Kontoleiste, offene
 letzte Trades, Journal, Status. **Nur lesend** – Steuerung läuft über den Telegram-Bot.
 Ohne Abhängigkeiten (Node ≥ 18), kostenlos auf Render (Free Plan) – genau wie der Gold Bot.
 
+## Design v2.1 (MP Trading Dashboard, Apple-/„Liquid Glass“-Optik)
+Schwebende Glas-Tab-Leiste mit 5 Ansichten, Milchglas-Karten über farbigem Hintergrund, iOS-Schalter/-Segmente, Hell/Dunkel/Auto:
+- **Übersicht** – Equity mit Zähl-Animation, Heute/Woche/Monat, interaktiver Chart (P/L kumuliert oder Equity-Verlauf, 1T/1W/1M/Alle, Finger-Scrubbing),
+  Status-Chips, Trefferquote-Ring, Profit-Faktor, **Tagesziel** mit Fortschrittsring, Gewinn-/Verlust-Serie, offene Positionen mit **R:R**.
+- **Trades** – Suche, Filter (Offen/Gewinn/Verlust), Strategie-Karten, nach Tagen gruppiert mit Tagessumme, Detail-Sheet, **CSV-Export**.
+- **Helfer** – Globus mit Helfer-Ring und Strahlen, Journal.
+- **Analyse** – Wochen-Report, **P/L-Kalender** (5 Wochen), Kennzahlen (Ø Gewinn/Verlust, Erwartungswert, Max. Drawdown, Serien),
+  Long vs. Short, Performance **nach Symbol** und **nach Uhrzeit**.
+- **Mehr** – Telegram-Steuerung, Design, **Privatmodus** (Beträge verbergen, auch über das Auge oben), Mitteilungen.
+Außerdem: Ziehen zum Aktualisieren, Live-Anzeige. Der Equity-Verlauf wird auf dem Gerät gesammelt (45 Tage); alle Kennzahlen werden aus dem Snapshot berechnet – keine Server-Änderung nötig.
+
 ## So fließen die Daten
 Der Bot auf der Box schickt alle 30 s einen bereinigten Schnappschuss (ohne Kontonummer,
 Passwörter, Tokens, interne Adressen) per `POST <APP_URL>/api/update` mit
