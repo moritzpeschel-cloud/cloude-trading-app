@@ -22,10 +22,22 @@ const fmt = (sym, x) => U.fmtPrice(x, I.get(sym).dp), side = d => d > 0 ? 'KAUF'
 const eur = v => (v >= 0 ? '+' : '−') + Math.abs(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
 const brokerOk = () => B.mode !== 'mt5' || MT5.connected();
-function useBroker() { B = CFG.broker === 'mt5' ? MT5 : PAPER; B.load(CFG.startBalance); S.dup = new Set(); }
+function useBroker() {
+  if (CFG.broker === 'mt5' && B === PAPER && PAPER.acc()) { const pa = PAPER.acc(); for (const p of [...pa.pos]) { const m = S.markets[p.sym]; const h = PAPER.close(p, m ? m.price : p.last, 'Wechsel auf MT5'); log(`${h.sym}: Paper-Trade geschlossen (Wechsel auf MT5) · ${eur(h.pnl)}`, [], h.pnl >= 0 ? 'win' : 'loss', h.sym); } pa.orders = []; PAPER.save(); }
+  B = CFG.broker === 'mt5' ? MT5 : PAPER; B.load(CFG.startBalance); S.dup = new Set(); }
+// Brücke weg? Dann nicht stillstehen: nach 10 Min. ohne Meldung auf Paper weiterhandeln (BROKER=mt5 erzwingt MT5)
+function brokerFallback() {
+  if (CFG.broker !== 'mt5' || process.env.BROKER === 'mt5' || MT5.connected()) return;
+  const st = MT5.status(), since = st.lastSync || S.mt5Since || (S.mt5Since = Date.now());
+  if (Date.now() - since < 10 * 60e3) return;
+  if (B.acc().pos.length) return;   // offene MT5-Trades: nicht wechseln (Stop/Ziel liegen beim Broker)
+  S.mt5Since = null; CFG.broker = 'paper'; persist(); useBroker();
+  log('MT5-Brücke seit über 10 Min. nicht erreichbar – Bot handelt vorerst mit dem Paper-Konto weiter (schaltet automatisch zurück, sobald die Brücke wieder läuft)', [{ n: 'Broker', e: 'Paper' }], 'cfg');
+  NOTIFY({ id: 'mt5off:' + Math.floor(Date.now() / 36e5), kind: 'alert', color: 'red', title: '⚠️ MT5-Brücke weg', body: 'Bot handelt vorerst mit dem Paper-Konto weiter' });
+}
 function setConfig(b) {
   for (const k of Object.keys(DEF)) { if (!(k in b)) continue;
-    if (k === 'broker') { const v = b.broker === 'mt5' ? 'mt5' : 'paper'; if (v !== CFG.broker) { CFG.broker = v; useBroker(); log(v === 'mt5' ? 'Broker gewechselt: MT5-Demo-Konto (über die Brücke)' : 'Broker gewechselt: Paper-Konto', [{ n: 'Broker', e: v }], 'cfg'); } }
+    if (k === 'broker') { const v = b.broker === 'mt5' ? 'mt5' : 'paper'; S.mt5Since = null; if (v !== CFG.broker) { CFG.broker = v; useBroker(); log(v === 'mt5' ? 'Broker gewechselt: MT5-Demo-Konto (über die Brücke)' : 'Broker gewechselt: Paper-Konto', [{ n: 'Broker', e: v }], 'cfg'); } }
     else if (typeof DEF[k] === 'boolean') CFG[k] = !!b[k];
     else if (LIM[k] && isFinite(+b[k])) CFG[k] = U.clamp(+b[k], ...LIM[k]); }
   persist(); log(`Einstellungen geändert: ${Object.keys(b).filter(k => k in DEF).map(k => k + '=' + CFG[k]).join(', ')}`, [], 'cfg'); return CFG;
@@ -60,7 +72,7 @@ const chips = a => [['Scanner', a.sig.setup], ['Analyst', a.analyst.bias.toFixed
 async function cycle() {
   if (BUSY) return; BUSY = true; const t0 = Date.now(); S.cycle++;
   try {
-    await K.refresh();
+    brokerFallback(); await K.refresh();
     // Daten
     for (const k of Object.keys(S.helpers)) if (S.helpers[k].s !== 'veto') S.helpers[k].s = 'working';
     const res = await Promise.allSettled(wl.map(loadMarket)); const fails = res.filter(r => r.status === 'rejected').length;
