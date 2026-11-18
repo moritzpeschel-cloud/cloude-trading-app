@@ -1,46 +1,48 @@
-// Setup-Erkennung + Trade-Plan. Wird identisch live (Scanner/Einstieg/Ausstieg) und im Backtest (Time Machine) benutzt –
-// so misst die Time Machine genau die Regeln, nach denen der Bot handelt (kein „Backtest-Schönrechnen“).
+// PLAYBOOK – nur Strategien, die auf 2 Jahren echter Kursdaten (Yahoo, Stundenkerzen) in Lern- UND ungesehener Prüfphase
+// nach allen Kosten (Spread, Kommission, Übernacht-Finanzierung) positiv waren (Labor-Ergebnis 18.11.2026):
+//  1) TREND-RÜCKSETZER (1h, Tages-Trendfilter) – Gold, Silber, Bitcoin, Ethereum. Stop 2 ATR, kein festes Ziel,
+//     Gewinne laufen mit Chandelier-Trailing 3,5 ATR (vom höchsten Schlusskurs), max. 240 h.
+//     Robust über alle getesteten Parameter (Stop 1,5–2,5 / Trailing 2–4 ATR). Auf Devisen ±0 → dort NICHT gehandelt.
+//  2) RSI-2-RÜCKKEHR (Tag) – S&P 500, Nasdaq 100, DAX, nur Kauf: Schluss über SMA 200 und RSI(2) < 10,
+//     Ausstieg Schluss über SMA 5 oder nach 10 Tagen, Not-Stop 2,5 ATR.
+// Alle anderen Märkte: nur beobachten.
 'use strict';
-const T = require('./ta');
-const ok = x => x != null && !isNaN(x);
-// Setups an Kerze i (abgeschlossene Kerze!). dir: +1 Kauf, -1 Verkauf. quality 0..1
-function setupAt(b, s, i) {
-  const c = s.c[i], a = s.atr[i]; if (!ok(s.e200[i]) || !ok(a) || !ok(s.adx.adx[i]) || !ok(s.dc.hi[i]) || a <= 0) return null;
-  const up = s.e20[i] > s.e50[i] && s.e50[i] > s.e200[i], dn = s.e20[i] < s.e50[i] && s.e50[i] < s.e200[i], adx = s.adx.adx[i], r = s.rsi[i], hist = s.macd.hist[i], hist1 = s.macd.hist[i - 1];
-  const volOk = !s.vma[i] || s.v[i] >= 1.15 * s.vma[i], out = [];
-  // A) Trend-Rücksetzer: Trend intakt, Kurs hat die EMA20 angetestet und schließt wieder in Trendrichtung
-  for (const d of [1, -1]) {
-    const trend = d > 0 ? up : dn; if (!trend || adx < 18) continue;
-    const touched = d > 0 ? b[i].l <= s.e20[i] + .25 * a && c > s.e20[i] : b[i].h >= s.e20[i] - .25 * a && c < s.e20[i];
-    const rsiOk = d > 0 ? r > 40 && r < 65 : r < 60 && r > 35, turn = d * hist > d * hist1;
-    if (touched && rsiOk) out.push({ dir: d, setup: 'Trend-Rücksetzer', q: .55 + Math.min(.25, (adx - 18) / 60) + (turn ? .12 : 0) + (d * (c - b[i].o) > 0 ? .08 : 0) });
-  }
-  // B) Ausbruch aus enger Spanne (Squeeze) über das 20-Kerzen-Hoch/-Tief
-  const sq = T.pctRank(s.bb.width, i - 1, 120);
-  for (const d of [1, -1]) {
-    const brk = d > 0 ? c > s.dc.hi[i] : c < s.dc.lo[i]; if (!brk || !(sq < .35)) continue;
-    const body = Math.abs(c - b[i].o) / a, align = d > 0 ? c > s.e200[i] : c < s.e200[i];
-    out.push({ dir: d, setup: 'Ausbruch', q: .5 + (volOk ? .12 : 0) + Math.min(.15, body * .1) + (align ? .13 : -.1) + (sq < .15 ? .08 : 0) });
-  }
-  // C) Rückkehr zur Mitte: kein Trend (ADX < 20), Überdehnung außerhalb der Bollinger-Bänder, RSI extrem, Umkehrkerze
-  if (adx < 20) for (const d of [1, -1]) {
-    const ext = d > 0 ? b[i].l < s.bb.lo[i] && r < 32 : b[i].h > s.bb.up[i] && r > 68, rev = d * (c - b[i].o) > 0;
-    if (ext && rev) out.push({ dir: d, setup: 'Rückkehr zur Mitte', q: .5 + Math.min(.2, Math.abs(r - 50) / 100) });
-  }
-  if (!out.length) return null;
-  out.sort((x, y) => y.q - x.q); const best = out[0]; best.q = Math.max(0, Math.min(1, best.q)); return best;
+const T = require('./ta'), U = require('./util'), M = require('./market'), I = require('./instruments');
+const PLAY = { XAUUSD: 'trend', XAGUSD: 'trend', BTCUSD: 'trend', ETHUSD: 'trend', US500: 'rsi2', NAS100: 'rsi2', GER40: 'rsi2' };
+const NAME = { trend: 'Trend-Rücksetzer', rsi2: 'RSI-2-Rückkehr' };
+const P = { stopA: 2, trailA: 3.5, rsiMax: 65, touchA: .2, maxHoldH: 240, rsi2Lvl: 10, rsi2Exit: 5, rsi2Stop: 2.5, rsi2MaxD: 10 };
+const FIN = sym => { const t = I.get(sym).type; return t === 'crypto' ? .20 : t === 'fx' ? .03 : .06; };   // Finanzierung p.a. auf den Positionswert
+const playOf = sym => PLAY[sym] || null;
+// Tages-Trend zum Zeitpunkt t (nur Tageskerzen, die mind. 1 Tag vor t fertig waren – kein Blick in die Zukunft)
+function dailyTrendFn(d) { const dc = d.map(x => x.c), de = T.ema(dc, 50); let j = 0;
+  return t => { while (j < d.length - 1 && d[j + 1].t <= t - 864e5) j++; const k = j; if (k < 51 || isNaN(de[k])) return 0;
+    return dc[k] > de[k] && de[k] > de[k - 5] ? 1 : dc[k] < de[k] && de[k] < de[k - 5] ? -1 : 0; }; }
+// Trend-Rücksetzer-Signal an Stundenkerze i
+function trendAt(b, s, i, dTrend) {
+  if (i < 210 || isNaN(s.atr[i])) return null; const a = s.atr[i], c = b[i].c, t = dTrend(b[i].t); if (!t) return null;
+  if (t > 0 ? !(s.e20[i] > s.e50[i]) : !(s.e20[i] < s.e50[i])) return null;
+  const touch = t > 0 ? b[i].l <= s.e20[i] + P.touchA * a && c > s.e20[i] && c > b[i].o : b[i].h >= s.e20[i] - P.touchA * a && c < s.e20[i] && c < b[i].o;
+  if (!touch || (t > 0 ? s.rsi[i] > P.rsiMax : s.rsi[i] < 100 - P.rsiMax)) return null;
+  return { dir: t, setup: NAME.trend, play: 'trend', q: .8, tf: '1h', t: b[i].t, ref: c, atr: a, stopDist: P.stopA * a };
 }
-// Plan: Stop hinter Struktur (Swing) bzw. ATR, Ziel 2R (Trend) oder Bandmitte (Rückkehr), Widerstand prüfen.
-function plan(b, s, i, sig, entry, cfg = {}) {
-  const a = s.atr[i], d = sig.dir, sw = T.swings(b, 3, i), look = i - 24;
-  const sws = (d > 0 ? sw.lo : sw.hi).filter(x => x.i >= look).map(x => x.p);
-  let stop = d > 0 ? Math.min(entry - 1.2 * a, ...(sws.length ? [Math.min(...sws) - .2 * a] : [])) : Math.max(entry + 1.2 * a, ...(sws.length ? [Math.max(...sws) + .2 * a] : []));
-  let risk = Math.abs(entry - stop); if (risk > 3 * a) { risk = 3 * a; stop = entry - d * risk; } if (risk < .8 * a) { risk = .8 * a; stop = entry - d * risk; }
-  let rr = cfg.rr || 2, target = entry + d * rr * risk;
-  if (sig.setup === 'Rückkehr zur Mitte') { const mid = s.bb.mid[i]; const r2 = Math.abs(mid - entry) / risk; rr = Math.max(1.3, Math.min(2.5, r2)); target = entry + d * rr * risk; }
-  // nächster Gegen-Swing innerhalb des Ziels -> Hindernis
-  const opp = (d > 0 ? sw.hi : sw.lo).filter(x => x.i >= i - 120).map(x => x.p).filter(p => d > 0 ? p > entry + .3 * risk && p < target : p < entry - .3 * risk && p > target);
-  const obstacle = opp.length ? (d > 0 ? Math.min(...opp) : Math.max(...opp)) : null;
-  return { entry, stop, target, risk, rr, obstacle, obstacleR: obstacle != null ? Math.abs(obstacle - entry) / risk : null, atr: a };
+function dailySeries(d) { const c = d.map(x => x.c); return { c, r2: T.rsi(c, 2), s200: T.sma(c, 200), s5: T.sma(c, P.rsi2Exit), atr: T.atr(d, 14) }; }
+function rsi2At(d, ds, i) {
+  if (i < 205 || isNaN(ds.atr[i])) return null; const c = ds.c[i]; if (!(c > ds.s200[i] && ds.r2[i] < P.rsi2Lvl)) return null;
+  return { dir: 1, setup: NAME.rsi2, play: 'rsi2', q: .8, tf: '1d', t: d[i].t, ref: c, atr: ds.atr[i], stopDist: P.rsi2Stop * ds.atr[i] };
 }
-module.exports = { setupAt, plan };
+// letzte abgeschlossene Tageskerze (heutige Kerze zählt erst, wenn der Markt zu ist)
+function lastClosedDaily(sym, d, now = Date.now()) { const L = d.length - 1; if (L < 0) return -1;
+  return U.berlin(d[L].t).date === U.berlin(now).date && M.isOpen(I.get(sym), now) ? L - 1 : L; }
+// Live-Signal für ein Symbol (m = Marktdaten mit h1, d1, s)
+function signal(sym, m, now = Date.now()) {
+  const pl = playOf(sym); if (!pl) return null;
+  if (pl === 'trend') { const b = m.h1, i = b.length && b[b.length - 1].live ? b.length - 2 : b.length - 1; return trendAt(b, m.s, i, dailyTrendFn(m.d1)); }
+  const d = m.d1, i = lastClosedDaily(sym, d, now); return i < 0 ? null : rsi2At(d, dailySeries(d), i);
+}
+// Trade-Plan: Grenze = Stop-Abstand. Ausstieg über Trailing bzw. SMA-5-Regel – das „Ziel“ ist nur ein weit entfernter
+// Sicherheits-TP beim Broker (10 R Trend / 5 R RSI-2), damit Gewinner wie im Test laufen können. mcTarget = 3 R für die Monte-Carlo-Einordnung.
+function plan(sym, m, sig, entry) {
+  const risk = sig.stopDist, stop = entry - sig.dir * risk, rr = sig.play === 'rsi2' ? 5 : 10, target = entry + sig.dir * rr * risk, mcTarget = entry + sig.dir * 3 * risk;
+  return { entry, stop, target, mcTarget, risk, rr, obstacle: null, obstacleR: null, atr: sig.atr, exit: sig.play === 'trend' ? `Trailing ${P.trailA} ATR vom besten Schlusskurs, max. ${P.maxHoldH} h` : `Schluss über SMA ${P.rsi2Exit} oder nach ${P.rsi2MaxD} Tagen` };
+}
+module.exports = { PLAY, NAME, P, FIN, playOf, signal, plan, trendAt, rsi2At, dailyTrendFn, dailySeries, lastClosedDaily };

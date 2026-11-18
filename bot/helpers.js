@@ -24,13 +24,13 @@ function scanner(markets, cfg) {
   const rows = [];
   for (const [sym, m] of Object.entries(markets)) {
     const b = m.h1, s = m.s, i = lastClosed(b); if (i < 210) continue;
-    const sig = S.setupAt(b, s, i), c = m.price, d24 = b[Math.max(0, b.length - 25)].c;
+    const sig = S.signal(sym, m), c = m.price, d24 = b[Math.max(0, b.length - 25)].c, play = S.playOf(sym);
     rows.push({ sym, name: I.get(sym).name, price: c, dp: I.get(sym).dp, chg: (c - d24) / d24, rsi: s.rsi[i], adx: s.adx.adx[i], atrPct: s.atr[i] / c, open: m.open, src: m.src,
-      sig: sig ? { dir: sig.dir, setup: sig.setup, q: sig.q } : null, bar: b[i].t, spark: b.slice(-48).map(x => +x.c.toPrecision(6)) });
+      play: play ? S.NAME[play] : null, sig: sig ? { dir: sig.dir, setup: sig.setup, q: sig.q, tf: sig.tf } : null, bar: sig ? sig.t : b[i].t, spark: b.slice(-48).map(x => +x.c.toPrecision(6)) });
   }
   rows.sort((a, b) => (b.sig ? b.sig.q : -1) - (a.sig ? a.sig.q : -1) || Math.abs(b.chg) - Math.abs(a.chg));
   const cand = rows.filter(r => r.sig && r.sig.q >= cfg.minScore && r.open);
-  return { s: 'done', t: cand.length ? `${cand.length} Setup${cand.length > 1 ? 's' : ''}: ${cand.slice(0, 3).map(r => r.sym + ' ' + (r.sig.dir > 0 ? '▲' : '▼')).join(', ')}` : `${rows.length} Märkte gescannt – kein sauberes Setup`, rows, cand };
+  return { s: 'done', t: cand.length ? `${cand.length} Setup${cand.length > 1 ? 's' : ''}: ${cand.slice(0, 3).map(r => r.sym + ' ' + (r.sig.dir > 0 ? '▲' : '▼')).join(', ')}` : `${rows.length} Märkte gescannt (${rows.filter(r => r.play).length} mit bewährter Strategie) – gerade kein Signal`, rows, cand };
 }
 // 2 · ANALYST – Multi-Timeframe-Trend
 function tfState(bars) { if (bars.length < 60) return null; const s = T.compute(bars), i = lastClosed(bars), c = bars[i].c;
@@ -58,47 +58,45 @@ function kongress(sym) {
   if (!st.ok) return { s: 'idle', t: st.note, score: 0, n: 0, ok: false };
   const f = K.flow(sym); return { s: 'done', t: f.n ? `${f.n} Meldungen (90 T.): ${f.score > .2 ? 'Politiker kaufen' : f.score < -.2 ? 'Politiker verkaufen' : 'gemischt'}` : `${sym}: keine Politiker-Trades`, score: f.score, n: f.n, recent: f.recent, ok: true };
 }
-// 5 · EINSTIEG – Kerzenschluss abwarten, nicht hinterherlaufen
+// 5 · EINSTIEG – erst nach Kerzenschluss, nicht hinterherlaufen (im Labor: Einstieg zur Eröffnung der Folgekerze)
 function einstieg(sym, m, sig) {
-  const b = m.h1, s = m.s, i = lastClosed(b), a = s.atr[i], c = b[i].c, px = m.price, inst = I.get(sym), chase = sig.dir * (px - c) / a;
-  const minsLeft = b[b.length - 1].live ? 60 - Math.floor((Date.now() - b[b.length - 1].t) / 60e3) : 0;
-  if (chase > .6) {   // schon weggelaufen -> Limit auf Rücksetzer
-    const lim = sig.setup === 'Ausbruch' ? (sig.dir > 0 ? s.dc.hi[i] : s.dc.lo[i]) : s.e20[i];
-    return { s: 'wait', t: `${sym}: Kurs schon ${chase.toFixed(1)} ATR gelaufen – Limit bei ${U.fmtPrice(lim, inst.dp)}`, type: 'limit', price: lim, chase };
-  }
-  if (chase < -.8) return { s: 'wait', t: `${sym}: Kurs läuft gegen das Signal – warte auf nächsten Kerzenschluss (${minsLeft} Min.)`, type: 'none', chase };
-  return { s: 'done', t: `${sym}: Kerze geschlossen, Signal bestätigt – Einstieg jetzt`, type: 'market', price: px, chase };
+  const px = m.price, inst = I.get(sym), chase = sig.dir * (px - sig.ref) / sig.atr;
+  if (chase > 1) return { s: 'wait', t: `${sym}: Kurs schon ${chase.toFixed(1)} ATR weitergelaufen – nicht hinterher, Signal verfällt`, type: 'none', chase };
+  if (chase < -1) return { s: 'wait', t: `${sym}: Kurs ist ${(-chase).toFixed(1)} ATR gegen das Signal gelaufen – kein Einstieg`, type: 'none', chase };
+  return { s: 'done', t: `${sym}: ${sig.tf === '1d' ? 'Tageskerze' : 'Stundenkerze'} geschlossen, ${sig.setup} bestätigt – Einstieg jetzt`, type: 'market', price: px, chase };
 }
-// 6 · AUSSTIEG – Plan + Management offener Positionen
-function ausstiegPlan(sym, m, sig, entry, cfg) {
-  const i = lastClosed(m.h1), p = S.plan(m.h1, m.s, i, sig, entry, { rr: cfg.rr }), dp = I.get(sym).dp;
-  return { s: 'done', t: `Ziel ${U.fmtPrice(p.target, dp)} · Grenze ${U.fmtPrice(p.stop, dp)} · ${p.rr.toFixed(1)} R${p.obstacle ? ` · Hindernis bei ${p.obstacleR.toFixed(1)} R` : ''}`, ...p };
+// 6 · AUSSTIEG – Plan + Management offener Positionen (genau die getesteten Regeln)
+function ausstiegPlan(sym, m, sig, entry) {
+  const p = S.plan(sym, m, sig, entry), dp = I.get(sym).dp;
+  return { s: 'done', t: `Grenze ${U.fmtPrice(p.stop, dp)} (${(p.risk / sig.atr).toFixed(1)} ATR) · Ausstieg: ${p.exit} · Sicherheits-Ziel ${U.fmtPrice(p.target, dp)} (${p.rr} R)`, ...p };
 }
 function manage(pos, markets, analysts, cfg, now) {   // -> Liste von Aktionen
   const acts = [];
-  for (const p of pos) { const m = markets[p.sym]; if (!m) continue; const i = lastClosed(m.h1), a = m.s.atr[i], R0 = Math.abs(p.entry - p.sl0), px = m.price, r = p.dir * (px - p.entry) / R0;
-    if (!p.be && r >= 1) { p.sl = p.entry + p.dir * Math.max(I.get(p.sym).spread, .05 * R0); p.be = true; acts.push({ p, t: `${p.sym}: +1 R erreicht → Grenze auf Einstand` }); }
-    if (r >= 1.5) { const tr = px - p.dir * 1.2 * a; if (p.dir * (tr - p.sl) > 0) { p.sl = tr; acts.push({ p, t: `${p.sym}: Trailing-Stop nachgezogen` }); } }
-    const ageH = (now - p.open) / 3600e3; if (ageH > cfg.horizon * 1.5 && r < .3) acts.push({ p, close: 'Zeit-Ausstieg (kein Fortschritt)' });
-    const an = analysts[p.sym]; if (an && an.bias * p.dir < -.55 && r < .5) acts.push({ p, close: 'Trendwechsel (Analyst)' });
+  for (const p of pos) { const m = markets[p.sym]; if (!m) continue; const play = S.playOf(p.sym) || 'trend';
+    if (play === 'rsi2') {   // Schluss über SMA 5 (abgeschlossene Tageskerze nach dem Einstieg) oder nach 10 Tagen
+      const d = m.d1, i = S.lastClosedDaily(p.sym, d, now); if (i < 5) continue; const ds = S.dailySeries(d);
+      if (d[i].t >= p.open - 12 * 3600e3 && ds.c[i] > ds.s5[i]) acts.push({ p, close: `Schluss über SMA ${S.P.rsi2Exit}` });
+      else if ((now - p.open) / 864e5 > S.P.rsi2MaxD * 1.4) acts.push({ p, close: `Zeit-Ausstieg (${S.P.rsi2MaxD} Handelstage)` });
+      continue; }
+    // Trend: Chandelier-Trailing vom besten Schlusskurs seit Einstieg, nur auf abgeschlossenen Stundenkerzen
+    const b = m.h1, i = lastClosed(b); let best = null; for (let k = b.length - 1; k >= 0 && b[k].t >= p.open - 3600e3; k--) { if (k > i) continue; best = best == null ? b[k].c : p.dir > 0 ? Math.max(best, b[k].c) : Math.min(best, b[k].c); }
+    if (best != null) { const n = best - p.dir * S.P.trailA * m.s.atr[i]; if (p.dir * (n - p.sl) > 0) { p.sl = n; p.be = p.dir * (n - p.entry) >= 0; acts.push({ p, t: `${p.sym}: Trailing-Stop nachgezogen auf ${U.fmtPrice(n, I.get(p.sym).dp)}` }); } }
+    if ((now - p.open) / 3600e3 > S.P.maxHoldH) acts.push({ p, close: `Zeit-Ausstieg (${S.P.maxHoldH} h)` });
   }
   return acts;
 }
-// 7 · TIME MACHINE – Monte-Carlo (Basis-Quoten) + Backtest (eigene Historie) -> gemischte Quoten & Erwartungswert
+// 7 · TIME MACHINE – Rückblick (genau dieses Playbook, 2 Jahre, nach Kosten) + 10.000 Monte-Carlo-Zukünfte zur Einordnung
 const btCache = new Map();
 function timemachine(sym, m, sig, plan, cfg, seed) {
-  const inst = I.get(sym), i = lastClosed(m.h1), key = sym + '|' + m.h1[i].t + '|' + sig.dir + '|' + sig.setup;
-  let bt = btCache.get(key); if (!bt) { bt = BT.run(m.h1, m.s, { horizon: cfg.horizon, spread: inst.spread, dir: sig.dir, setup: sig.setup, minQ: cfg.minScore });
-    if (bt.n < 8) bt = { ...BT.run(m.h1, m.s, { horizon: cfg.horizon, spread: inst.spread, minQ: cfg.minScore }), broad: true }; btCache.set(key, bt); if (btCache.size > 300) btCache.delete(btCache.keys().next().value); }
-  const mc = MC.run({ bars: m.h1, entry: plan.entry, stop: plan.stop, target: plan.target, dir: sig.dir, horizon: cfg.horizon, n: cfg.mcRuns, cost: inst.spread, seed });
-  // Bayes-Mischung: MC-Basisquote als Vorwissen (Gewicht k), Backtest-Ergebnisse als Beobachtung
-  const k = 20, nb = bt.n || 0, hitsT = nb && bt.winrate != null ? bt.winrate * nb : 0;
-  const pT = (mc.pTarget * k + hitsT) / (k + nb), pS = Math.min(1 - pT, (mc.pStop * k + (nb - hitsT) * (mc.pStop / Math.max(.01, mc.pStop + mc.pNone))) / (k + nb)), pN = Math.max(0, 1 - pT - pS);
-  const ev = pT * plan.rr - pS * 1 + pN * (mc.medianR || 0) - inst.spread / plan.risk / 2;
-  const edge = nb >= 8 ? bt.avgR : null;
-  return { s: 'done', t: `${cfg.mcRuns.toLocaleString('de-DE')} Durchläufe: Ziel zuerst ${U.pct(mc.pTarget)} · Grenze ${U.pct(mc.pStop)} · keins ${U.pct(mc.pNone)} | Rückblick ${nb} Trades, Ø ${bt.avgR != null ? bt.avgR.toFixed(2) : '–'} R`,
-    mc, bt: { n: bt.n, winrate: bt.winrate, avgR: bt.avgR, pf: bt.pf, totalR: bt.totalR, maxDDR: bt.maxDDR, curve: bt.curve.slice(-80), bySetup: bt.bySetup, broad: !!bt.broad, last: bt.last.slice(0, 6) },
-    adj: { pTarget: pT, pStop: pS, pNone: pN, evR: ev }, edge };
+  const inst = I.get(sym), key = sym + '|' + m.h1[lastClosed(m.h1)].t;
+  let bt = btCache.get(key); if (!bt) { bt = BT.run(sym, m.h1, m.s, m.d1); btCache.set(key, bt); if (btCache.size > 100) btCache.delete(btCache.keys().next().value); }
+  const daily = sig.tf === '1d', bars = daily ? m.d1 : m.h1, horizon = daily ? S.P.rsi2MaxD : cfg.horizon;
+  const mc = MC.run({ bars, entry: plan.entry, stop: plan.stop, target: plan.mcTarget || plan.target, dir: sig.dir, horizon, n: cfg.mcRuns, cost: inst.spread, seed });
+  // Entscheidungsgrundlage ist der Rückblick (echte Regeln, echte Kosten), vorsichtig geschrumpft bei wenigen Trades
+  const nb = bt.n || 0, ev = nb ? bt.avgR * nb / (nb + 20) : 0, edge = nb >= 15 ? bt.avgR : null;
+  return { s: 'done', t: `Rückblick ${nb} Trades: Ø ${bt.avgR != null ? (bt.avgR >= 0 ? '+' : '') + bt.avgR.toFixed(2) : '–'} R, Treffer ${U.pct(bt.winrate, 0)} · ${cfg.mcRuns.toLocaleString('de-DE')} Zukünfte: 3 R zuerst ${U.pct(mc.pTarget)}, Grenze zuerst ${U.pct(mc.pStop)}`,
+    mc, bt: { n: bt.n, winrate: bt.winrate, avgR: bt.avgR, avgW: bt.avgW, avgL: bt.avgL, pf: bt.pf, totalR: bt.totalR, maxDDR: bt.maxDDR, curve: bt.curve.slice(-120), bySetup: bt.bySetup, broad: false, last: bt.last.slice(0, 6) },
+    adj: { pTarget: bt.winrate ?? mc.pTarget, pStop: bt.winrate != null ? 1 - bt.winrate : mc.pStop, pNone: 0, evR: ev }, edge };
 }
 // 8 · RISIKO – harte Regeln, jede kann den Trade stoppen
 function risiko(sym, sig, plan, tm, an, nw, ctx) {
@@ -111,11 +109,12 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
   add(positions.length < cfg.maxOpen, 'Max. Positionen', `${positions.length}/${cfg.maxOpen} offen`);
   add(!positions.some(p => p.sym === sym) && !acc.orders.some(o => o.sym === sym), 'Nur 1 Trade je Markt', positions.some(p => p.sym === sym) ? 'schon offen' : 'frei');
   const grp = positions.filter(p => I.get(p.sym).group === inst.group).length; add(grp < cfg.maxPerGroup, 'Klumpenrisiko', `${grp}/${cfg.maxPerGroup} in Gruppe „${inst.group}“`);
-  add(an.bias * sig.dir > -.3, 'Nicht gegen den großen Trend', `Analyst ${an.bias >= 0 ? '+' : ''}${an.bias.toFixed(2)}`);
+  if (!S.playOf(sym)) add(false, 'Bewährte Strategie', 'für diesen Markt keine Strategie mit nachgewiesenem Vorteil – nur Beobachtung');
+  if (sig.tf === '1d') add(true, 'Großer Trend intakt', 'Schluss über SMA 200 (Teil des Signals)');
+  else add(an.bias * sig.dir > -.3, 'Nicht gegen den großen Trend', `Analyst ${an.bias >= 0 ? '+' : ''}${an.bias.toFixed(2)}`);
   add(!(nw.breaking && nw.breaking.s * sig.dir < 0), 'Keine Gegen-Eilmeldung', nw.breaking ? nw.breaking.title.slice(0, 50) : 'keine');
-  add(plan.rr >= 1.3 && (plan.obstacleR == null || plan.obstacleR >= 1), 'Chance/Risiko', `${plan.rr.toFixed(1)} R${plan.obstacleR ? `, Hindernis ${plan.obstacleR.toFixed(1)} R` : ''}`);
   add(inst.spread / plan.risk < .12, 'Spread-Kosten', `${(inst.spread / plan.risk * 100).toFixed(1)} % des Risikos`);
-  add(tm.adj.evR >= cfg.minEV, 'Erwartungswert (Time Machine)', `${tm.adj.evR >= 0 ? '+' : ''}${tm.adj.evR.toFixed(2)} R (min. ${cfg.minEV} R)`);
+  add(tm.adj.evR >= cfg.minEV, 'Erwartungswert (Rückblick)', `${tm.adj.evR >= 0 ? '+' : ''}${tm.adj.evR.toFixed(2)} R je Trade nach Kosten (min. ${cfg.minEV} R)`);
   add(tm.edge == null || tm.edge > 0, 'Regeln historisch profitabel', tm.edge == null ? 'zu wenig Historie – neutral' : `Ø ${tm.edge.toFixed(2)} R in ${tm.bt.n} Trades`);
   const fail = checks.filter(c => !c.ok);
   return { s: fail.length ? 'veto' : 'done', t: fail.length ? `STOPP: ${fail.map(f => f.name).join(', ')}` : `alle ${checks.length} Prüfungen bestanden`, ok: !fail.length, checks };
@@ -123,7 +122,7 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
 // 9 · BUDGET – Positionsgröße: Risiko € / Abstand zur Grenze, mit ¼-Kelly-Deckel und Hebel-Grenze
 function budget(sym, plan, tm, ctx) {
   const { cfg, eq } = ctx, inst = I.get(sym), riskPct = cfg.riskPct / 100;
-  const p = tm.adj.pTarget / Math.max(.01, tm.adj.pTarget + tm.adj.pStop), kelly = Math.max(0, p - (1 - p) / plan.rr), kCap = kelly / 4;
+  const bt = tm.bt || {}, p = bt.winrate ?? .4, ratio = bt.avgW && bt.avgL ? bt.avgW / bt.avgL : 1.5, kelly = Math.max(0, p - (1 - p) / ratio), kCap = kelly / 4;
   const usePct = Math.min(riskPct, Math.max(riskPct * .4, kCap || riskPct * .4)), riskEur = eq * usePct;
   const perLotEur = Math.abs(B.toEur(sym, plan.risk * inst.cs, plan.entry)); let lots = Math.floor(riskEur / perLotEur / inst.step) * inst.step;
   const notionalEur = Math.abs(B.toEur(sym, plan.entry * inst.cs, plan.entry)), maxLots = Math.floor(eq * cfg.maxLeverage / notionalEur / inst.step) * inst.step; lots = Math.min(lots, maxLots); lots = +lots.toFixed(6);
