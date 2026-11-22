@@ -8,7 +8,7 @@ const M = require('./market'), T = require('./ta'), H = require('./helpers'), PA
 const K = require('./congress'), AI = require('./claude');
 const DIR = process.env.DATA_DIR || '/tmp/cloude-skill', CFG_FILE = path.join(DIR, 'config.json'), AL_FILE = path.join(DIR, 'alarms.json');
 let B = PAPER;
-const DEF = { broker: process.env.BROKER === 'mt5' ? 'mt5' : 'paper', auto: true, kill: false, riskMode: 'eur', riskEur: 5, maxDailyLossEur: 10, maxTradesDay: 3, riskPct: 0.5, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.05, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
+const DEF = { broker: process.env.BROKER === 'mt5' ? 'mt5' : 'paper', auto: true, kill: false, riskMode: 'eur', riskEur: 5, maxDailyLossEur: 10, maxTradesDay: 10, riskPct: 0.5, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.05, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
 const LIM = { riskEur: [1, 1000], maxDailyLossEur: [2, 5000], maxTradesDay: [1, 20], riskPct: [0.05, 3], maxDailyLossPct: [0.5, 10], maxOpen: [1, 10], maxPerGroup: [1, 6], maxLeverage: [1, 30], minScore: [0.4, 0.95], minEV: [-0.2, 1], rr: [1, 5], horizon: [6, 120], mcRuns: [1000, 20000] };
 let CFG = { ...DEF }, ALARMS = [], NOTIFY = () => {}, TIMER = null, RUNNING = false, BUSY = false;
 const S = { gen: 0, cycle: 0, lastMs: 0, last: 0, helpers: {}, scanner: [], focus: null, journal: [], alarmLog: [], markets: {}, analysts: {}, error: null, started: Date.now(), dup: new Set() };

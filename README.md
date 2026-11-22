@@ -16,7 +16,7 @@ Siehe **docs/LABOR.md** (2 Jahre echte Kurse, Lern-/Prüfphase, nach allen Koste
 * **RSI-2-Rückkehr** (Tag, nur Kauf über SMA 200) – S&P 500, Nasdaq 100, Dow Jones, mit halbem Risiko
 * Devisen, DAX und Einzelaktien: **nur Beobachtung** (kein nachweisbarer Vorteil – 5 Forex-Strategien auf 10 Paaren getestet). Standard-Risiko 0,5 % je Trade.
 * Verlust-Bremse (10 % → halbes Risiko, 20 % → Pause) und Leistungs-Check Live vs. Test.
-* **Risiko in Euro (Standard):** max. **5 € je Trade**, max. **10 € je Tag** (Verluste heute + offenes Risiko bis zu den Stops + neue Order), max. **3 Trades/Tag**,
+* **Risiko in Euro (Standard):** max. **5 € je Trade**, max. **10 € je Tag** (Verluste heute + offenes Risiko bis zu den Stops + neue Order), max. **10 Trades/Tag**,
   kein 2. Einstieg im selben Markt am selben Tag – gezählt werden **nur die eigenen Trades** (im MT5-Konto: Magic 261118), unabhängig von der Kontogröße.
   Märkte, deren kleinste Positionsgröße schon mehr als 5 € riskiert (meist Gold, Silber), werden ausgelassen. Umstellbar unter Mehr → Risiko-Regeln.
 
