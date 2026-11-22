@@ -217,7 +217,7 @@ function trades() { const A = SK.acc, s = A.stats; $('#eq-sub').textContent = `$
   $('#jr').innerHTML = journal(40); }
 
 // ---------- Mehr ----------
-const CFGUI = [['riskEur', 'Max. Verlust je Trade', '€', 1, 100, 1], ['maxDailyLossEur', 'Max. Verlust je Tag (inkl. offenem Risiko)', '€', 2, 500, 1], ['maxTradesDay', 'Max. Trades je Tag', '', 1, 10, 1], ['maxOpen', 'Max. offene Trades', '', 1, 10, 1], ['maxPerGroup', 'Max. je Markt-Gruppe', '', 1, 6, 1],
+const CFGUI = [['riskEur', 'Max. Verlust je Trade', '€', 1, 100, 1], ['maxDailyLossEur', 'Max. Verlust je Tag (inkl. offenem Risiko)', '€', 2, 500, 1], ['maxTradesDay', 'Max. Trades je Tag', '', 1, 20, 1], ['maxOpen', 'Max. offene Trades', '', 1, 10, 1], ['maxPerGroup', 'Max. je Markt-Gruppe', '', 1, 6, 1],
   ['minScore', 'Min. Setup-Qualität', '', .4, .95, .01], ['minEV', 'Min. Erwartungswert', 'R', -.2, 1, .01], ['rr', 'Chance/Risiko-Ziel', 'R', 1, 5, .1], ['horizon', 'Time-Machine-Horizont', 'h', 6, 120, 6], ['mcRuns', 'Monte-Carlo-Durchläufe', '', 1000, 20000, 1000], ['maxLeverage', 'Max. Hebel', '×', 1, 30, 1]];
 function setupMehr() {
   const ctl = (id, a, b) => $(id).onchange = async e => { try { await post('api/skill/control', { action: e.target.checked ? a : b }); toast('Gespeichert'); refresh(); } catch (er) { toast('Fehler', er.message, 'dn'); e.target.checked = !e.target.checked; } };

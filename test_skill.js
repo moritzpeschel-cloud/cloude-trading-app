@@ -58,7 +58,7 @@ const U = require('./bot/util'), T = require('./bot/ta'), MC = require('./bot/mo
   assert.ok(!rk.ok && rk.checks.some(c => c.name === 'Verlust-Bremse' && !c.ok), 'ab 20 % Rückgang Pause');
   assert.ok(E.snapshot().perf && E.snapshot().perf.status, 'Leistungs-Check im Snapshot');
   // Euro-Limits (5 €/Trade, 10 €/Tag, max. 3 Trades) – wie trader-budget/trader-risk
-  const C = E.cfg(); assert.equal(C.riskMode, 'eur'); assert.equal(C.riskEur, 5); assert.equal(C.maxDailyLossEur, 10); assert.equal(C.maxTradesDay, 3);
+  const C = E.cfg(); assert.equal(C.riskMode, 'eur'); assert.equal(C.riskEur, 5); assert.equal(C.maxDailyLossEur, 10); assert.equal(C.maxTradesDay, 10);
   const ctxE = { cfg: C, eq: 100000 }, tmE = { bt: { winrate: .3, avgW: 3, avgL: 1 } };
   const bGold = H2.budget('XAUUSD', { risk: 37, entry: 3757 }, tmE, ctxE); assert.ok(!bGold.ok, 'Gold bei 5 € nicht handelbar (Min-Lot zu groß)'); assert.match(bGold.t, /kleinste Größe/);
   const bSpx = H2.budget('US500', { risk: 335, entry: 6910 }, tmE, ctxE); assert.ok(bSpx.ok && bSpx.riskEur <= 5 && bSpx.lots >= .01, 'S&P 500 mit 5 € handelbar');
@@ -69,7 +69,7 @@ const U = require('./bot/util'), T = require('./bot/ta'), MC = require('./bot/mo
   assert.ok(chk({}, 4.9).ok, 'normaler Fall erlaubt');
   assert.ok(!chk({ realizedLoss: 6 }, 4.9).ok, '6 € Verlust + 4,9 € neues Risiko > 10 € → Stopp');
   assert.ok(!chk({ openRisk: 6 }, 4.9).ok, 'offenes Risiko zählt mit');
-  assert.ok(!chk({ entriesToday: 3 }, 1).ok, 'max. 3 Trades je Tag');
+  assert.ok(!chk({ entriesToday: 10 }, 1).ok, 'max. 10 Trades je Tag');
   assert.ok(!chk({ symsToday: ['ETHUSD'] }, 1).ok, 'kein 2. Einstieg im selben Markt am selben Tag');
   assert.ok(E.snapshot().own && typeof E.snapshot().own.openRisk === 'number', 'eigene Tagesbilanz im Snapshot');
   console.log('trader-skill: alle Tests bestanden'); process.exit(0);
