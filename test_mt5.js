@@ -36,7 +36,7 @@ let PX = {}; const bridge = (extra = {}) => execFileSync('python3', [path.join(_
     assert.equal(s.pos.length, 1); const p = s.pos[0]; assert.equal(p.sym, SY); assert.ok(p.lots > 0); assert.ok(Math.abs(p.entry - PX[SY]) < PX[SY] * .002 + .2, 'Einstieg in Bot-Kursen (Versatz abgezogen)');
     assert.ok(s.journal.some(j => /MT5 hat ausgeführt/.test(j.text)));
     const st = JSON.parse(fs.readFileSync(STATE)); const fp = st.pos[0]; const CS = { XAUUSD: 100, EURUSD: 1e5 }[SY] || 1, loss = Math.abs(fp.price_open - fp.sl) * fp.volume * CS;
-    assert.ok(loss <= s.cfg.riskPct / 100 * 10000 * 1.02 && loss > 0, `Risiko exakt aus MT5 berechnet (${loss.toFixed(2)} €)`);
+    assert.ok(loss <= s.cfg.riskEur * 1.02 && loss > 0, `Risiko exakt aus MT5 berechnet, max. ${s.cfg.riskEur} € (${loss.toFixed(2)} €)`);
     // Ausstieg verschiebt Stop -> SLTP an MT5
     await ctl('/manage'); out = bridge(); assert.match(out, /Stop →/); const st2 = JSON.parse(fs.readFileSync(STATE)); assert.ok(Math.abs(st2.pos[0].sl - st2.pos[0].price_open) < Math.abs(fp.price_open - fp.sl) * .2, 'Stop auf Einstand');
     // Schließen aus dem Dashboard -> Brücke schließt -> geschlossener Trade erscheint

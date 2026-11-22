@@ -106,7 +106,7 @@ function sheet(k) {
 // ---------- Kennzahlen ----------
 function kpis() {
   const A = SK.acc, s = A.stats, k = (l, v, sub, c, id) => `<div class="kpi">${id ? `<canvas id="${id}"></canvas>` : ''}<div class="l">${l}</div><div class="v ${c || ''}">${v}</div><div class="s">${sub || ''}</div></div>`;
-  $('#kpis').innerHTML = k(isMT ? 'Equity · MT5' : 'Equity · Paper', eur(A.equity), `Start ${eur(A.start)}`, '', 'kpi-eq') + k('Heute', sg(A.today), 'realisiert + offen', cls(A.today)) + k('Gesamt', sg(A.total), pct(A.total / A.start, 2), cls(A.total))
+  $('#kpis').innerHTML = k(isMT ? 'Equity · MT5' : 'Equity · Paper', eur(A.equity), `Start ${eur(A.start)}`, '', 'kpi-eq') + k('Heute (Bot)', sg(A.today), SK.own ? `Risiko offen ${eur(SK.own.openRisk)} · ${SK.own.entriesToday}/${SK.cfg.maxTradesDay} Trades` : 'realisiert + offen', cls(A.today)) + k('Gesamt', sg(A.total), pct(A.total / A.start, 2), cls(A.total))
     + k('Trefferquote', s.winrate == null ? '–' : pct(s.winrate, 0), `${s.wins} G / ${s.losses} V`) + k('Profit-Faktor', s.pf == null ? '–' : nf(Math.min(s.pf, 99), 2), `Ø ${sR(s.avgR)}`) + k('Max. Drawdown', pct(s.maxDD, 1), `${A.open} offen`, s.maxDD > .1 ? 'dn' : '');
   const c = $('#kpi-eq'); if (c) CH.area(c, A.curve, { mini: true, base: A.start });
 }
@@ -209,7 +209,7 @@ function anaRender() { const a = ANA, el = $('#ana'); if (!a) return;
 function trades() { const A = SK.acc, s = A.stats; $('#eq-sub').textContent = `${eur(A.equity)} · ${sg(A.total)}${SK.perf ? ' · ' + SK.perf.text : ''}`; CH.area($('#eqc'), A.curve, { base: A.start, baseLabel: 'START', dp: 0 });
   const F = (l, v, c) => `<div class="fact"><div class="l">${l}</div><div class="v ${c || ''}">${v}</div></div>`;
   const pf = SK.perf || {}, ddv = SK.dd || {};
-  $('#stats').innerHTML = F('Leistungs-Check', pf.status === 'ok' ? '✅ im Plan' : pf.status === 'warn' ? '⚠️ schwächer' : '⏳ sammelt', pf.status === 'warn' ? 'dn' : '') + F('Rückgang', pct(ddv.dd, 1), ddv.dd >= .1 ? 'dn' : '') + F('Trades', s.n) + F('Treffer', pct(s.winrate, 0)) + F('Profit-F.', s.pf == null ? '–' : nf(Math.min(s.pf, 99), 2)) + F('Woche', sg(A.week), cls(A.week)) + F('Monat', sg(A.month), cls(A.month)) + F('Bester', sg(s.best), 'up');
+  $('#stats').innerHTML = F('Leistungs-Check', pf.status === 'ok' ? '✅ im Plan' : pf.status === 'warn' ? '⚠️ schwächer' : '⏳ sammelt', pf.status === 'warn' ? 'dn' : '') + F('Rückgang', ddv.ddEur != null ? '−' + eur(ddv.ddEur) : pct(ddv.dd, 1), ddv.dd >= .1 ? 'dn' : '') + F('Trades', s.n) + F('Treffer', pct(s.winrate, 0)) + F('Profit-F.', s.pf == null ? '–' : nf(Math.min(s.pf, 99), 2)) + F('Woche', sg(A.week), cls(A.week)) + F('Monat', sg(A.month), cls(A.month)) + F('Bester', sg(s.best), 'up');
   $('#pos').innerHTML = posList(false); bindClose($('#pos')); $('#ord').innerHTML = '';
   $('#hist-sub').textContent = `${SK.hist.length} letzte`;
   $('#hist').innerHTML = SK.hist.length ? SK.hist.map(h => `<div class="item ${h.pnl > 0 ? 'win' : 'loss'}"><div class="a"><div><b>${esc(h.sym)}</b> ${side(h.dir)} <span class="mut">${h.lots}</span></div><b class="${cls(h.pnl)}">${sg(h.pnl)}</b></div>
@@ -217,7 +217,7 @@ function trades() { const A = SK.acc, s = A.stats; $('#eq-sub').textContent = `$
   $('#jr').innerHTML = journal(40); }
 
 // ---------- Mehr ----------
-const CFGUI = [['riskPct', 'Risiko je Trade', '%', .05, 3, .05], ['maxDailyLossPct', 'Tages-Verlustlimit', '%', .5, 10, .5], ['maxOpen', 'Max. offene Trades', '', 1, 10, 1], ['maxPerGroup', 'Max. je Markt-Gruppe', '', 1, 6, 1],
+const CFGUI = [['riskEur', 'Max. Verlust je Trade', '€', 1, 100, 1], ['maxDailyLossEur', 'Max. Verlust je Tag (inkl. offenem Risiko)', '€', 2, 500, 1], ['maxTradesDay', 'Max. Trades je Tag', '', 1, 10, 1], ['maxOpen', 'Max. offene Trades', '', 1, 10, 1], ['maxPerGroup', 'Max. je Markt-Gruppe', '', 1, 6, 1],
   ['minScore', 'Min. Setup-Qualität', '', .4, .95, .01], ['minEV', 'Min. Erwartungswert', 'R', -.2, 1, .01], ['rr', 'Chance/Risiko-Ziel', 'R', 1, 5, .1], ['horizon', 'Time-Machine-Horizont', 'h', 6, 120, 6], ['mcRuns', 'Monte-Carlo-Durchläufe', '', 1000, 20000, 1000], ['maxLeverage', 'Max. Hebel', '×', 1, 30, 1]];
 function setupMehr() {
   const ctl = (id, a, b) => $(id).onchange = async e => { try { await post('api/skill/control', { action: e.target.checked ? a : b }); toast('Gespeichert'); refresh(); } catch (er) { toast('Fehler', er.message, 'dn'); e.target.checked = !e.target.checked; } };
