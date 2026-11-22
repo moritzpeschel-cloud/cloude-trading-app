@@ -13,8 +13,9 @@ Der Bot handelt in einem **Paper-Konto** (kein echtes Geld). **Keine Anlageberat
 ## Playbook – nur, was auf echten Daten einen Vorteil hat
 Siehe **docs/LABOR.md** (2 Jahre echte Kurse, Lern-/Prüfphase, nach allen Kosten):
 * **Trend-Rücksetzer** (1h, Tages-Trendfilter, Trailing 3,5 ATR) – Gold, Silber, Bitcoin, Ethereum
-* **RSI-2-Rückkehr** (Tag, nur Kauf über SMA 200) – S&P 500, Nasdaq 100, DAX
-* Devisen und Einzelaktien: **nur Beobachtung** (kein nachweisbarer Vorteil). Standard-Risiko 0,5 % je Trade.
+* **RSI-2-Rückkehr** (Tag, nur Kauf über SMA 200) – S&P 500, Nasdaq 100, Dow Jones, mit halbem Risiko
+* Devisen, DAX und Einzelaktien: **nur Beobachtung** (kein nachweisbarer Vorteil – 5 Forex-Strategien auf 10 Paaren getestet). Standard-Risiko 0,5 % je Trade.
+* Verlust-Bremse (10 % → halbes Risiko, 20 % → Pause) und Leistungs-Check Live vs. Test.
 
 ## Die 11 Helfer (Reihenfolge im Zyklus, alle 60 s)
 

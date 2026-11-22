@@ -103,6 +103,7 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
   const { cfg, acc, eq, positions, open } = ctx, inst = I.get(sym), dayPnl = eq - acc.dayStart.eq, checks = [];
   const add = (ok, name, why) => checks.push({ ok, name, why });
   add(!cfg.kill, 'Not-Aus', cfg.kill ? 'Not-Aus ist AN' : 'aus');
+  if (ctx.dd != null) add(ctx.dd < .20, 'Verlust-Bremse', ctx.dd >= .20 ? `Rückgang ${(ctx.dd * 100).toFixed(1)} % vom Höchststand – neue Trades pausiert` : ctx.dd >= .10 ? `Rückgang ${(ctx.dd * 100).toFixed(1)} % – halbes Risiko` : `Rückgang ${(ctx.dd * 100).toFixed(1)} % – normal`);
   if (ctx.broker === false) add(false, 'MT5 verbunden', 'Brücke meldet sich nicht – Order wird nicht gesendet');
   add(open, 'Markt offen', open ? 'Handelszeit' : 'Markt geschlossen / Daten veraltet');
   add(dayPnl > -cfg.maxDailyLossPct / 100 * acc.dayStart.eq, 'Tageslimit', `Heute ${dayPnl.toFixed(2)} € (Limit −${(cfg.maxDailyLossPct / 100 * acc.dayStart.eq).toFixed(0)} €)`);
@@ -121,12 +122,12 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
 }
 // 9 · BUDGET – Positionsgröße: Risiko € / Abstand zur Grenze, mit ¼-Kelly-Deckel und Hebel-Grenze
 function budget(sym, plan, tm, ctx) {
-  const { cfg, eq } = ctx, inst = I.get(sym), riskPct = cfg.riskPct / 100;
+  const { cfg, eq } = ctx, inst = I.get(sym), mul = (S.RISK_MUL[S.playOf(sym)] ?? 1) * (ctx.ddMul ?? 1), riskPct = cfg.riskPct / 100 * mul;
   const bt = tm.bt || {}, p = bt.winrate ?? .4, ratio = bt.avgW && bt.avgL ? bt.avgW / bt.avgL : 1.5, kelly = Math.max(0, p - (1 - p) / ratio), kCap = kelly / 4;
   const usePct = Math.min(riskPct, Math.max(riskPct * .4, kCap || riskPct * .4)), riskEur = eq * usePct;
   const perLotEur = Math.abs(B.toEur(sym, plan.risk * inst.cs, plan.entry)); let lots = Math.floor(riskEur / perLotEur / inst.step) * inst.step;
   const notionalEur = Math.abs(B.toEur(sym, plan.entry * inst.cs, plan.entry)), maxLots = Math.floor(eq * cfg.maxLeverage / notionalEur / inst.step) * inst.step; lots = Math.min(lots, maxLots); lots = +lots.toFixed(6);
   const ok = lots >= inst.min, real = lots * perLotEur;
-  return { s: ok ? 'done' : 'veto', t: ok ? `${lots} ${inst.stock ? 'Stück' : 'Lot'} · Risiko ${real.toFixed(2)} € (${(real / eq * 100).toFixed(2)} %)` : `Position wäre kleiner als Mindestgröße (${inst.min}) – ausgelassen`, ok, lots, riskEur: real, usePct, kelly };
+  return { s: ok ? 'done' : 'veto', t: ok ? `${lots} ${inst.stock ? 'Stück' : 'Lot'} · Risiko ${real.toFixed(2)} € (${(real / eq * 100).toFixed(2)} %)` : `Position wäre kleiner als Mindestgröße (${inst.min}) – ausgelassen`, ok, lots, riskEur: real, usePct, kelly, mul };
 }
 module.exports = { META, scanner, analyst, news, kongress, einstieg, ausstiegPlan, manage, timemachine, risiko, budget, lastClosed, agg };

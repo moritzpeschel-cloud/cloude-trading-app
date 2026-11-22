@@ -30,3 +30,35 @@ Trend-Rücksetzer: positiv in **allen 15** getesteten Parameter-Kombinationen (S
 **Einordnung:** Gold, Silber und Ethereum hatten in dieser Zeit starke Trends – Trendstrategien profitieren davon. In Seitwärtsphasen
 ist deutlich weniger zu erwarten, Verlustserien von 10+ Trades sind bei ~30 % Trefferquote normal. Deshalb Standard-Risiko **0,5 %** je Trade.
 Vergangene Ergebnisse garantieren nichts. Keine Anlageberatung.
+
+---
+
+# Runde 2 (22.11.2026): Forex, mehr Krypto, Filter, 10 Jahre Indizes
+
+## Forex – 10 Paare, 5 Strategie-Familien (`docs/fx.js`)
+EURUSD, GBPUSD, USDJPY, USDCAD, USDCHF, NZDUSD, EURJPY, GBPJPY, EURGBP, AUDJPY · nach Spread, Kommission, 3 % Finanzierung
+| Strategie | Lernphase | Prüfphase |
+|---|---|---|
+| Tages-Trendfolge (Donchian 55/20) | −0,42 R | −0,55 R |
+| RSI-2-Rückkehr Tag (beidseitig) | −0,01 R | +0,01 R |
+| Bollinger-Rückkehr 4h (ADX < 20) | −0,08 R | −0,12 R |
+| London-Ausbruch | −0,10 R | −0,13 R |
+| Trend-Rücksetzer 1h | −0,12 R | −0,14 R |
+**Ergebnis: keine profitable Forex-Strategie → Forex wird im Scanner angezeigt und beobachtet, aber nicht gehandelt.**
+
+## Weitere Kryptos (`docs/improve.js coins`)
+SOL, XRP, BNB, DOGE, ADA mit dem Trend-Rücksetzer: in der Lernphase ausgewählte Coins (XRP, BNB, ADA) fallen in der Prüfphase ab
+(BNB −0,11 R); alle fünf zusammen Prüfphase ≈ +0,05 R → **zu schwach, nicht aufgenommen.**
+
+## Filter für den Trend-Rücksetzer (`docs/improve.js`)
+Analyst-Veto, ADX ≥ 20/25, Volatilitätsfilter, Uhrzeit (ohne Asien / nur EU+US), nur Kauf, Haltedauer 120/480 h:
+**keiner verbessert Lern- UND Prüfphase verlässlich** → Regel bleibt unverändert (Prüfphase +0,26 R, PF 1,45 auf Gold/Silber/BTC/ETH).
+
+## RSI-2 auf 11 Indizes, 10 Jahre (`docs/idx.js`)
+Gesamt Lern (2016–22) −0,04 R / Prüf (2022–26) +0,06 R. Nur US-Indizes (S&P 500, Nasdaq, Dow Jones) in beiden Phasen ≥ 0;
+DAX −0,14 R in der Lernphase. → **RSI-2 nur noch auf S&P 500, Nasdaq 100, Dow Jones, mit halbem Risiko. DAX nur Beobachtung.**
+
+## Neue Schutzfunktionen
+* **Verlust-Bremse:** ab 10 % Rückgang vom Equity-Hoch halbes Risiko, ab 20 % keine neuen Trades (Push-Mitteilung).
+* **Leistungs-Check:** Live-Ø R gegen die Rückblick-Erwartung; Warnung, wenn nach ≥ 20 Trades mehr als ~2 Standardfehler darunter.
+* Index-CFDs Mindestgröße 0,01 Lot (sonst wären Positionen bei 0,25 % Risiko nicht handelbar).
