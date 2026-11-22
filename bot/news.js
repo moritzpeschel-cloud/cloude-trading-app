@@ -52,11 +52,17 @@ function parseCalendar(j) {
   return (Array.isArray(j) ? j : []).map(e => ({ title: String(e.title || '').slice(0, 80), cur: String(e.country || '').toUpperCase(), impact: String(e.impact || ''), t: Date.parse(e.date) }))
     .filter(e => isFinite(e.t) && e.impact === 'High' && CURR.includes(e.cur)).sort((a, b) => a.t - b.t);
 }
+let CAL_INFLIGHT = null, CAL_BACKOFF = 0;
 async function refreshCalendar(now = Date.now()) {
-  if (CAL.at && now - CAL.at < (CAL.ok ? CAL_EVERY : 15 * 60e3)) return CAL;
+  if (CAL_INFLIGHT) return CAL_INFLIGHT;   // nie mehrere Anfragen gleichzeitig (die Quelle antwortet sonst mit 429)
+  if (CAL.at && now - CAL.at < (CAL.ok && !CAL.note ? CAL_EVERY : Math.max(15 * 60e3, CAL_BACKOFF))) return CAL;
+  CAL_INFLIGHT = refreshCalendarNow(now).finally(() => { CAL_INFLIGHT = null; }); return CAL_INFLIGHT;
+}
+async function refreshCalendarNow(now) {
   if (M.status().source === 'sim') { CAL = { at: now, events: [], ok: false, note: 'keine Live-Verbindung – Kalender aus' }; return CAL; }
-  try { const ev = parseCalendar(JSON.parse(await M.get(CAL_URL))); CAL = { at: now, events: ev, ok: true, note: null }; }
-  catch (e) { CAL = { ...CAL, at: now, ok: CAL.events.length > 0, note: 'Kalender nicht erreichbar (' + String(e.message).slice(0, 30) + ') – letzte Daten werden genutzt' }; }
+  try { const ev = parseCalendar(JSON.parse(await M.get(CAL_URL))); CAL = { at: now, events: ev, ok: true, note: null }; CAL_BACKOFF = 0; }
+  catch (e) { const r429 = /429/.test(String(e.message)); CAL_BACKOFF = r429 ? Math.min(4 * 3600e3, Math.max(30 * 60e3, CAL_BACKOFF * 2)) : 15 * 60e3;
+    CAL = { ...CAL, at: now, ok: CAL.events.length > 0, note: 'Kalender nicht erreichbar (' + String(e.message).slice(0, 30) + `) – neuer Versuch in ${Math.round(CAL_BACKOFF / 60e3)} Min.` + (CAL.events.length ? ', letzte Daten werden genutzt' : '') }; }
   return CAL;
 }
 // Pause aktiv? -> { paused, event, from, to } ; next = nächster Termin
