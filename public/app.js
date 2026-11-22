@@ -185,7 +185,7 @@ function markt() {
   const R = SK.scanner; $('#scan-sub').textContent = `${R.length} Märkte · ${R.filter(r => r.sig).length} Setups`;
   $('#scan').innerHTML = `<tr><th>Markt</th><th class="r">Kurs</th><th class="r">24 h</th><th>Verlauf</th><th>Signal</th><th class="r">RSI</th><th class="r">ADX</th></tr>` + R.map(r => `<tr class="click" data-sym="${esc(r.sym)}">
    <td><b>${esc(r.sym)}</b><div class="mut">${esc(r.name)}${r.open ? '' : ' · <span class="closed">GESCHLOSSEN</span>'}</div></td><td class="r">${nf(r.price, r.dp)}</td><td class="r ${cls(r.chg)}">${r.chg >= 0 ? '+' : ''}${pct(r.chg, 2)}</td>
-   <td>${CH.spark(r.spark, r.spark[r.spark.length - 1] >= r.spark[0])}</td><td>${r.sig ? `<span class="sig ${r.sig.dir > 0 ? 'b' : 's'}">${r.sig.dir > 0 ? '▲' : '▼'} ${esc(r.sig.setup)}</span>` : r.play ? `<span class="sig n">${esc(r.play)} · wartet</span>` : '<span class="sig n">nur beobachten</span>'}</td>
+   <td>${CH.spark(r.spark, r.spark[r.spark.length - 1] >= r.spark[0])}</td><td>${r.sig ? `<span class="sig ${r.sig.dir > 0 ? 'b' : 's'}">${r.sig.dir > 0 ? '▲' : '▼'} ${esc(r.sig.setup)}</span>` : r.play ? (r.tradeable === false ? `<span class="sig n">mit ${eur(SK.cfg.riskEur)} nicht handelbar (min. ${eur(r.minRiskEur)})</span>` : `<span class="sig n">${esc(r.play)} · wartet</span>`) : '<span class="sig n">nur beobachten</span>'}</td>
    <td class="r">${nf(r.rsi, 0)}</td><td class="r">${nf(r.adx, 0)}</td></tr>`).join('');
   $$('#scan tr[data-sym]').forEach(t => t.onclick = () => { SEL = t.dataset.sym; analyze(); $('#ana').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   $('#kong').innerHTML = kongList();

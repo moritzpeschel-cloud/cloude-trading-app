@@ -41,4 +41,28 @@ function sentiment(items, now = Date.now()) {
   const breaking = items.find(x => now - x.t < 90 * 60e3 && Math.abs(x.s) >= 2) || null;
   return { score: val, n: items.length, breaking };
 }
-module.exports = { fetchNews, sentiment, score, parseRss };
+// ---------- Wirtschaftskalender (Forex Factory, öffentliche Wochen-Übersicht, ohne Key) ----------
+// Hochwichtige USD-Termine (Zinsentscheid FOMC, Inflation CPI, Arbeitsmarkt NFP, Fed-Chef …) bewegen Gold, Krypto und US-Indizes oft
+// sprunghaft – ein Stop kann dann übersprungen werden. Regel (Schutz, nicht als Gewinnregel getestet): keine NEUEN Einstiege von
+// PAUSE_BEFORE Min. vor bis PAUSE_AFTER Min. nach so einem Termin. Offene Trades bleiben unangetastet (ihr Stop schützt).
+const CAL_URL = process.env.CALENDAR_URL || 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
+const PAUSE_BEFORE = 30, PAUSE_AFTER = 60, CAL_EVERY = 3 * 3600e3, CURR = ['USD'];
+let CAL = { at: 0, events: [], ok: false, note: 'lädt …' };
+function parseCalendar(j) {
+  return (Array.isArray(j) ? j : []).map(e => ({ title: String(e.title || '').slice(0, 80), cur: String(e.country || '').toUpperCase(), impact: String(e.impact || ''), t: Date.parse(e.date) }))
+    .filter(e => isFinite(e.t) && e.impact === 'High' && CURR.includes(e.cur)).sort((a, b) => a.t - b.t);
+}
+async function refreshCalendar(now = Date.now()) {
+  if (CAL.at && now - CAL.at < (CAL.ok ? CAL_EVERY : 15 * 60e3)) return CAL;
+  if (M.status().source === 'sim') { CAL = { at: now, events: [], ok: false, note: 'keine Live-Verbindung – Kalender aus' }; return CAL; }
+  try { const ev = parseCalendar(JSON.parse(await M.get(CAL_URL))); CAL = { at: now, events: ev, ok: true, note: null }; }
+  catch (e) { CAL = { ...CAL, at: now, ok: CAL.events.length > 0, note: 'Kalender nicht erreichbar (' + String(e.message).slice(0, 30) + ') – letzte Daten werden genutzt' }; }
+  return CAL;
+}
+// Pause aktiv? -> { paused, event, from, to } ; next = nächster Termin
+function calendarPause(now = Date.now(), events = CAL.events) {
+  const hit = events.find(e => now >= e.t - PAUSE_BEFORE * 60e3 && now <= e.t + PAUSE_AFTER * 60e3);
+  const next = events.find(e => e.t > now) || null;
+  return { paused: !!hit, event: hit || null, until: hit ? hit.t + PAUSE_AFTER * 60e3 : null, next, ok: CAL.ok, note: CAL.note };
+}
+module.exports = { fetchNews, sentiment, score, parseRss, parseCalendar, refreshCalendar, calendarPause, PAUSE_BEFORE, PAUSE_AFTER, _setCal: c => { CAL = { at: Date.now(), ok: true, note: null, ...c }; } };

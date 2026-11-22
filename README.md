@@ -26,7 +26,7 @@ Siehe **docs/LABOR.md** (2 Jahre echte Kurse, Lern-/Prüfphase, nach allen Koste
 |---|---|
 | **Scanner** | Durchsucht alle Märkte der Watchlist nach drei Setups: *Trend-Rücksetzer* (EMA-20-Test im intakten Trend), *Ausbruch* aus enger Spanne (Bollinger-Squeeze + 20-Kerzen-Hoch/-Tief) und *Rückkehr zur Mitte* (Überdehnung ohne Trend). |
 | **Analyst** | Trend auf 1 h / 4 h / Tag (EMA 20/50, Steigung, RSI, MACD), Marktphase über ADX, Unterstützung/Widerstand aus Swing-Punkten. |
-| **News** | Schlagzeilen (Yahoo-Finance-RSS) mit Finanz-Wörterbuch (EN/DE) bewertet, Halbwertszeit 12 h, Eilmeldungen < 90 Min. Ohne Verbindung werden **keine** Schlagzeilen erfunden. |
+| **News** | Schlagzeilen (Yahoo-Finance-RSS) mit Finanz-Wörterbuch (EN/DE), Eilmeldungen < 90 Min. **Wirtschaftskalender** (Forex Factory, ohne Key): bei hochwichtigen USD-Terminen (FOMC, CPI, NFP …) keine neuen Einstiege von 30 Min. vorher bis 60 Min. nachher. **Kurssprung-Pause**: > 3 ATR in einer Stundenkerze → 2 h keine neuen Einstiege in dem Markt. Ohne Verbindung werden **keine** Schlagzeilen erfunden. |
 | **Kongress** | Aktien-Trades von US-Abgeordneten (STOCK-Act, Netto-Kauf/-Verkauf 90 Tage). Benötigt `QUIVER_API_KEY` oder eine eigene JSON-Quelle `CONGRESS_URL` – sonst neutral. |
 | **Einstieg** | Wertet nur abgeschlossene Kerzen aus, läuft dem Kurs nicht hinterher: zu weit gelaufen → Limit-Order am Rücksetzer (6 h gültig). |
 | **Ausstieg** | Grenze hinter der Struktur (Swing ± 0,2 ATR, 0,8–3 ATR), Ziel 2 R (bzw. Bandmitte), prüft Hindernisse vor dem Ziel. Managt offene Trades: Einstand ab +1 R, Trailing-Stop ab +1,5 R, Zeit-Ausstieg, Ausstieg bei Trendwechsel. |
