@@ -106,7 +106,12 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
   if (ctx.dd != null) add(ctx.dd < .20, 'Verlust-Bremse', ctx.dd >= .20 ? `Rückgang ${(ctx.dd * 100).toFixed(1)} % vom Höchststand – neue Trades pausiert` : ctx.dd >= .10 ? `Rückgang ${(ctx.dd * 100).toFixed(1)} % – halbes Risiko` : `Rückgang ${(ctx.dd * 100).toFixed(1)} % – normal`);
   if (ctx.broker === false) add(false, 'MT5 verbunden', 'Brücke meldet sich nicht – Order wird nicht gesendet');
   add(open, 'Markt offen', open ? 'Handelszeit' : 'Markt geschlossen / Daten veraltet');
-  add(dayPnl > -cfg.maxDailyLossPct / 100 * acc.dayStart.eq, 'Tageslimit', `Heute ${dayPnl.toFixed(2)} € (Limit −${(cfg.maxDailyLossPct / 100 * acc.dayStart.eq).toFixed(0)} €)`);
+  if (cfg.riskMode === 'eur' && ctx.own) {   // wie trader-risk: Verluste heute + offenes Risiko bis zu den Stops + diese Order ≤ Tageslimit (nur eigene Trades)
+    const o = ctx.own, newR = ctx.newRisk || 0, sum = o.realizedLoss + o.openRisk + newR;
+    add(sum <= cfg.maxDailyLossEur + 1e-9, 'Tageslimit (eigene Trades)', `Verlust heute ${o.realizedLoss.toFixed(2)} € + offenes Risiko ${o.openRisk.toFixed(2)} € + diese Order ${newR.toFixed(2)} € = ${sum.toFixed(2)} € (max. ${cfg.maxDailyLossEur} €)`);
+    add(o.entriesToday < cfg.maxTradesDay, 'Max. Trades heute', `${o.entriesToday}/${cfg.maxTradesDay}`);
+    add(!o.symsToday.includes(sym), 'Kein 2. Einstieg heute im selben Markt', o.symsToday.includes(sym) ? 'heute schon gehandelt' : 'frei');
+  } else add(dayPnl > -cfg.maxDailyLossPct / 100 * acc.dayStart.eq, 'Tageslimit', `Heute ${dayPnl.toFixed(2)} € (Limit −${(cfg.maxDailyLossPct / 100 * acc.dayStart.eq).toFixed(0)} €)`);
   add(positions.length < cfg.maxOpen, 'Max. Positionen', `${positions.length}/${cfg.maxOpen} offen`);
   add(!positions.some(p => p.sym === sym) && !acc.orders.some(o => o.sym === sym), 'Nur 1 Trade je Markt', positions.some(p => p.sym === sym) ? 'schon offen' : 'frei');
   const grp = positions.filter(p => I.get(p.sym).group === inst.group).length; add(grp < cfg.maxPerGroup, 'Klumpenrisiko', `${grp}/${cfg.maxPerGroup} in Gruppe „${inst.group}“`);
@@ -124,10 +129,11 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
 function budget(sym, plan, tm, ctx) {
   const { cfg, eq } = ctx, inst = I.get(sym), mul = (S.RISK_MUL[S.playOf(sym)] ?? 1) * (ctx.ddMul ?? 1), riskPct = cfg.riskPct / 100 * mul;
   const bt = tm.bt || {}, p = bt.winrate ?? .4, ratio = bt.avgW && bt.avgL ? bt.avgW / bt.avgL : 1.5, kelly = Math.max(0, p - (1 - p) / ratio), kCap = kelly / 4;
-  const usePct = Math.min(riskPct, Math.max(riskPct * .4, kCap || riskPct * .4)), riskEur = eq * usePct;
+  // Euro-Modus: fester Betrag je Trade (Obergrenze, ohne Kelly-Kürzung, ohne Strategie-Faktor – sonst wären bei 5 € fast keine Positionen möglich)
+  const eurMode = cfg.riskMode === 'eur', usePct = eurMode ? (cfg.riskEur * (ctx.ddMul ?? 1)) / eq : Math.min(riskPct, Math.max(riskPct * .4, kCap || riskPct * .4)), riskEur = eurMode ? cfg.riskEur * (ctx.ddMul ?? 1) : eq * usePct;
   const perLotEur = Math.abs(B.toEur(sym, plan.risk * inst.cs, plan.entry)); let lots = Math.floor(riskEur / perLotEur / inst.step) * inst.step;
   const notionalEur = Math.abs(B.toEur(sym, plan.entry * inst.cs, plan.entry)), maxLots = Math.floor(eq * cfg.maxLeverage / notionalEur / inst.step) * inst.step; lots = Math.min(lots, maxLots); lots = +lots.toFixed(6);
   const ok = lots >= inst.min, real = lots * perLotEur;
-  return { s: ok ? 'done' : 'veto', t: ok ? `${lots} ${inst.stock ? 'Stück' : 'Lot'} · Risiko ${real.toFixed(2)} € (${(real / eq * 100).toFixed(2)} %)` : `Position wäre kleiner als Mindestgröße (${inst.min}) – ausgelassen`, ok, lots, riskEur: real, usePct, kelly, mul };
+  return { s: ok ? 'done' : 'veto', t: ok ? `${lots} ${inst.stock ? 'Stück' : 'Lot'} · Risiko ${real.toFixed(2)} €` + (cfg.riskMode === 'eur' ? ` (max. ${cfg.riskEur} €)` : ` (${(real / eq * 100).toFixed(2)} %)`) : `schon die kleinste Größe (${inst.min} ${inst.stock ? 'Stück' : 'Lot'}) riskiert ${(perLotEur * inst.min).toFixed(2)} € – mehr als erlaubt (${riskEur.toFixed(2)} €), ausgelassen`, ok, lots, riskEur: real, usePct, kelly, mul };
 }
 module.exports = { META, scanner, analyst, news, kongress, einstieg, ausstiegPlan, manage, timemachine, risiko, budget, lastClosed, agg };

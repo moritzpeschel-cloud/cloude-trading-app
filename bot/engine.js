@@ -8,8 +8,8 @@ const M = require('./market'), T = require('./ta'), H = require('./helpers'), PA
 const K = require('./congress'), AI = require('./claude');
 const DIR = process.env.DATA_DIR || '/tmp/cloude-skill', CFG_FILE = path.join(DIR, 'config.json'), AL_FILE = path.join(DIR, 'alarms.json');
 let B = PAPER;
-const DEF = { broker: process.env.BROKER === 'mt5' ? 'mt5' : 'paper', auto: true, kill: false, riskPct: 0.5, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.05, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
-const LIM = { riskPct: [0.05, 3], maxDailyLossPct: [0.5, 10], maxOpen: [1, 10], maxPerGroup: [1, 6], maxLeverage: [1, 30], minScore: [0.4, 0.95], minEV: [-0.2, 1], rr: [1, 5], horizon: [6, 120], mcRuns: [1000, 20000] };
+const DEF = { broker: process.env.BROKER === 'mt5' ? 'mt5' : 'paper', auto: true, kill: false, riskMode: 'eur', riskEur: 5, maxDailyLossEur: 10, maxTradesDay: 3, riskPct: 0.5, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.05, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
+const LIM = { riskEur: [1, 1000], maxDailyLossEur: [2, 5000], maxTradesDay: [1, 20], riskPct: [0.05, 3], maxDailyLossPct: [0.5, 10], maxOpen: [1, 10], maxPerGroup: [1, 6], maxLeverage: [1, 30], minScore: [0.4, 0.95], minEV: [-0.2, 1], rr: [1, 5], horizon: [6, 120], mcRuns: [1000, 20000] };
 let CFG = { ...DEF }, ALARMS = [], NOTIFY = () => {}, TIMER = null, RUNNING = false, BUSY = false;
 const S = { gen: 0, cycle: 0, lastMs: 0, last: 0, helpers: {}, scanner: [], focus: null, journal: [], alarmLog: [], markets: {}, analysts: {}, error: null, started: Date.now(), dup: new Set() };
 const wl = I.watchlist();
@@ -23,11 +23,24 @@ const eur = v => (v >= 0 ? '+' : '−') + Math.abs(v).toLocaleString('de-DE', { 
 
 const brokerOk = () => B.mode !== 'mt5' || MT5.connected();
 // Verlust-Bremse: Rückgang vom Höchststand der Equity -> ab 10 % halbes Risiko, ab 20 % keine neuen Trades
-function ddState(eq) { const acc = B.acc(); let pk = acc.start || eq; for (const [, e] of acc.curve || []) pk = Math.max(pk, e); pk = Math.max(pk, eq);
-  const dd = pk > 0 ? Math.max(0, (pk - eq) / pk) : 0, lvl = dd >= .20 ? 2 : dd >= .10 ? 1 : 0;
+// Eigene Trades (Paper: alle; MT5: nur Magic 261118) – Grundlage für Euro-Limits, Tagesbilanz und Verlust-Bremse
+function ownBook() { const acc = B.acc(), today = U.berlin().date, isToday = t => t && U.berlin(t).date === today;
+  const hist = acc.hist || [], pos = acc.pos || [];
+  const closedToday = hist.filter(h => isToday(h.close)), realizedLoss = -closedToday.filter(h => h.pnl < 0).reduce((a, h) => a + h.pnl, 0), realizedNet = closedToday.reduce((a, h) => a + (h.pnl || 0), 0);
+  const remRisk = p => { const d0 = Math.abs(p.entry - (p.sl0 ?? p.sl)) || 1, frac = U.clamp(p.dir * (p.entry - p.sl) / d0, 0, 1);
+    if (p.riskEur) return p.riskEur * frac; const inst = I.get(p.sym); return inst ? Math.max(0, -PAPER.toEur(p.sym, p.dir * (p.sl - p.entry) * p.lots * inst.cs, p.entry)) : 0; };
+  const openRisk = pos.reduce((a, p) => a + remRisk(p), 0), upnl = pos.reduce((a, p) => a + (p.upnl || 0), 0);
+  const entriesToday = pos.filter(p => isToday(p.open)).length + hist.filter(h => isToday(h.open)).length;
+  const symsToday = [...new Set([...pos.filter(p => isToday(p.open)), ...hist.filter(h => isToday(h.open))].map(x => x.sym))];
+  let run = 0, pk = 0; for (const h of [...hist].sort((a, b) => a.close - b.close)) { run += h.pnl || 0; pk = Math.max(pk, run); } const total = run + upnl; pk = Math.max(pk, total);
+  return { realizedLoss, realizedNet, openRisk, upnl, today: realizedNet + upnl, entriesToday, symsToday, total, ddEur: Math.max(0, pk - total) }; }
+function ddState(eq) { let dd, ddEur = null;
+  if (CFG.riskMode === 'eur') { ddEur = ownBook().ddEur; dd = ddEur / (100 * CFG.riskEur); }   // Bot-Budget = 100 × Risiko je Trade (5 € → 500 €)
+  else { const acc = B.acc(); let pk = acc.start || eq; for (const [, e] of acc.curve || []) pk = Math.max(pk, e); pk = Math.max(pk, eq); dd = pk > 0 ? Math.max(0, (pk - eq) / pk) : 0; }
+  const lvl = dd >= .20 ? 2 : dd >= .10 ? 1 : 0;
   if (lvl !== S.ddLvl && S.ddLvl != null) { const t = lvl === 2 ? '⛔ Verlust-Bremse: neue Trades pausiert' : lvl === 1 ? '⚠️ Verlust-Bremse: halbes Risiko' : '✅ Verlust-Bremse aufgehoben';
     log(`${t} (Rückgang ${(dd * 100).toFixed(1)} % vom Höchststand)`, [{ n: 'Risiko', e: 'Bremse' }], 'cfg'); NOTIFY({ id: 'dd:' + lvl + ':' + U.berlin().date, kind: 'alert', color: lvl ? 'red' : 'green', title: t, body: `Rückgang ${(dd * 100).toFixed(1)} % vom Höchststand` }); }
-  S.ddLvl = lvl; return { dd, ddMul: lvl === 2 ? 0 : lvl === 1 ? .5 : 1 }; }
+  S.ddLvl = lvl; return { dd, ddEur, ddMul: lvl === 2 ? 0 : lvl === 1 ? .5 : 1 }; }
 // Leistungs-Check: Live-Ergebnisse (R) gegen das, was der Rückblick erwarten lässt
 function perfCheck() { const H = (B.acc().hist || []).filter(h => h.R != null && h.close >= S.started); const n = H.length, sum = H.reduce((a, h) => a + h.R, 0), avg = n ? sum / n : null;
   const ex = Object.values(S.expect || {}); const exp = ex.length ? ex.reduce((a, b) => a + b, 0) / ex.length : null;
@@ -51,6 +64,7 @@ function brokerFallback() {
 function setConfig(b) {
   for (const k of Object.keys(DEF)) { if (!(k in b)) continue;
     if (k === 'broker') { const v = b.broker === 'mt5' ? 'mt5' : 'paper'; S.mt5Since = null; if (v !== CFG.broker) { CFG.broker = v; useBroker(); log(v === 'mt5' ? 'Broker gewechselt: MT5-Demo-Konto (über die Brücke)' : 'Broker gewechselt: Paper-Konto', [{ n: 'Broker', e: v }], 'cfg'); } }
+    else if (k === 'riskMode') CFG.riskMode = b.riskMode === 'pct' ? 'pct' : 'eur';
     else if (typeof DEF[k] === 'boolean') CFG[k] = !!b[k];
     else if (LIM[k] && isFinite(+b[k])) CFG[k] = U.clamp(+b[k], ...LIM[k]); }
   persist(); log(`Einstellungen geändert: ${Object.keys(b).filter(k => k in DEF).map(k => k + '=' + CFG[k]).join(', ')}`, [], 'cfg'); return CFG;
@@ -67,8 +81,8 @@ async function analyze(sym, sigIn = null, ctx = null) {
   const plan = H.ausstiegPlan(sym, m, sig, entry), tm = H.timemachine(sym, m, sig, plan, CFG, U.hash(sym + m.h1[i].t));
   if (!hypo && tm.bt && tm.bt.n >= 15) { S.expect = S.expect || {}; S.expect[sym] = tm.bt.avgR; }
   if (!B.acc()) B.load(CFG.startBalance); const acc = B.acc(), prices = priceMap(), eq = B.equity(prices);
-  ctx = ctx || { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk(), ...ddState(eq) };
-  const rk = H.risiko(sym, sig, plan, tm, an, nw, ctx), bu = H.budget(sym, plan, tm, ctx);
+  ctx = ctx || { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk(), own: ownBook(), ...ddState(eq) };
+  const bu = H.budget(sym, plan, tm, ctx), rk = H.risiko(sym, sig, plan, tm, an, nw, { ...ctx, newRisk: bu.riskEur });
   // Gesamtnote 0..100 (wie stark stimmen die Helfer überein?)
   const al = x => U.clamp(x * sig.dir, -1, 1);
   const grade = hypo ? null : Math.round(U.clamp(sig.q * 40 + (al(an.bias) + 1) / 2 * 25 + (al(nw.score) + 1) / 2 * 10 + (al(ko.score) + 1) / 2 * 5 + U.clamp(tm.adj.evR / .5, 0, 1) * 20, 0, 100));
@@ -118,7 +132,7 @@ async function cycle() {
     const eq = B.mark(prices), cands = (S.inject || sc.cand).slice(0, 4); S.inject = null; let focus = null, best = -1, acted = null;
     for (const c of cands) {
       const m = S.markets[c.sym], key = c.sym + '|' + c.bar + '|' + c.sig.dir;
-      const a = await analyze(c.sym, c.sig, { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk(), ...ddState(eq) });
+      const a = await analyze(c.sym, c.sig, { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk(), own: ownBook(), ...ddState(eq) });
       if (a.grade > best) { best = a.grade; focus = a; }
       if (S.dup.has(key)) { a.decision = acc.pos.some(p => p.sym === c.sym) ? 'Trade zu diesem Signal läuft bereits' : 'Signal wurde bereits entschieden'; continue; }   // dieses Signal (Kerze) wurde schon entschieden
       let decision = null;
@@ -165,7 +179,7 @@ async function alarms(prices, eq) {
     if (a.dir > 0 ? px >= a.price : px <= a.price) { a.done = Date.now(); fired.push({ id: 'al:' + a.id, title: `🔔 ${a.sym} ${a.dir > 0 ? 'über' : 'unter'} ${fmt(a.sym, a.price)}`, body: a.note || `Kurs ${fmt(a.sym, px)}` }); } }
   for (const p of acc.pos) { const R0 = Math.abs(p.entry - p.sl0), r = p.dir * ((prices[p.sym] ?? p.last) - p.entry) / R0, dist = p.dir * ((prices[p.sym] ?? p.last) - p.sl) / R0;
     if (dist < .25 && !p.be) fired.push({ id: 'near:' + p.id, title: `⚠️ ${p.sym}: nahe an der Grenze`, body: `${r.toFixed(2)} R · Grenze ${fmt(p.sym, p.sl)}` }); }
-  const day = eq - acc.dayStart.eq, lim = CFG.maxDailyLossPct / 100 * acc.dayStart.eq;
+  const ob = ownBook(), day = CFG.riskMode === 'eur' ? -(ob.realizedLoss + Math.max(0, -ob.upnl)) : eq - acc.dayStart.eq, lim = CFG.riskMode === 'eur' ? CFG.maxDailyLossEur : CFG.maxDailyLossPct / 100 * acc.dayStart.eq;
   if (day < -.75 * lim) fired.push({ id: 'day:' + acc.dayStart.date, title: '⚠️ Tageslimit fast erreicht', body: `Heute ${eur(day)} von −${lim.toFixed(0)} €` });
   const f = S.focus; if (f && f.news && f.news.breaking) fired.push({ id: 'news:' + f.sym + ':' + f.news.breaking.t, title: `📰 Eilmeldung ${f.sym}`, body: f.news.breaking.title });
   for (const sym of wl) { const m = S.markets[sym]; if (!m) continue; const i = H.lastClosed(m.h1), a = m.s.atr[i], mv = m.price - m.h1[i].c;
@@ -187,7 +201,7 @@ function resetAccount(bal) { if (B.mode === 'mt5') throw new Error('Im MT5-Modus
 
 // ---------- Snapshot fürs Dashboard ----------
 function snapshot() {
-  const acc = B.acc(), prices = priceMap(), eq = B.equity(prices), st = B.stats(), today = eq - acc.dayStart.eq;
+  const acc = B.acc(), prices = priceMap(), eq = B.equity(prices), st = B.stats(), ob = ownBook(), today = CFG.riskMode === 'eur' || acc.mt5 ? ob.today : eq - acc.dayStart.eq;
   const curve = acc.curve.length > 400 ? acc.curve.filter((_, i, a) => i % Math.ceil(a.length / 400) === 0 || i === a.length - 1) : acc.curve;
   const f = S.focus && { ...S.focus, tm: { ...S.focus.tm, mc: { ...S.focus.tm.mc } } };
   return { gen: S.gen, engine: { cycle: S.cycle, last: S.last, ms: S.lastMs, intervalS: CFG.intervalS, error: S.error, running: RUNNING, started: S.started, watch: wl.length, ai: AI.available(), aiModel: AI.available() ? AI.MODEL : null },
@@ -196,7 +210,7 @@ function snapshot() {
     pos: acc.pos.map(p => ({ id: p.id, sym: p.sym, dir: p.dir, lots: p.lots, entry: p.entry, sl: p.sl, tp: p.tp, sl0: p.sl0, open: p.open, upnl: p.upnl, last: p.last, by: p.by, be: p.be, dp: I.get(p.sym).dp, R: U.round(p.dir * (p.last - p.entry) / Math.abs(p.entry - p.sl0), 2), meta: p.meta })),
     orders: acc.orders.map(o => ({ id: o.id, sym: o.sym, dir: o.dir, lots: o.lots, limit: o.limit, sl: o.sl, tp: o.tp, expires: o.expires, by: o.by, dp: I.get(o.sym).dp })),
     hist: acc.hist.slice(0, 60).map(h => ({ ...h, dp: I.get(h.sym) ? I.get(h.sym).dp : 2 })),
-    perf: perfCheck(), dd: ddState(eq),
+    perf: perfCheck(), dd: ddState(eq), own: { today: U.round(ob.today, 2), total: U.round(ob.total, 2), realizedLoss: U.round(ob.realizedLoss, 2), openRisk: U.round(ob.openRisk, 2), entriesToday: ob.entriesToday, ddEur: U.round(ob.ddEur, 2) },
     scanner: S.scanner, focus: f, journal: S.journal.slice(0, 60), alarms: ALARMS.filter(a => !a.done), alarmLog: S.alarmLog.slice(0, 20), kongress: { ...K.state(), latest: K.latest(12) } };
 }
 function start({ notify } = {}) {
