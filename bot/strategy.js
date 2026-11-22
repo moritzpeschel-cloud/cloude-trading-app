@@ -3,12 +3,15 @@
 //  1) TREND-RÜCKSETZER (1h, Tages-Trendfilter) – Gold, Silber, Bitcoin, Ethereum. Stop 2 ATR, kein festes Ziel,
 //     Gewinne laufen mit Chandelier-Trailing 3,5 ATR (vom höchsten Schlusskurs), max. 240 h.
 //     Robust über alle getesteten Parameter (Stop 1,5–2,5 / Trailing 2–4 ATR). Auf Devisen ±0 → dort NICHT gehandelt.
-//  2) RSI-2-RÜCKKEHR (Tag) – S&P 500, Nasdaq 100, DAX, nur Kauf: Schluss über SMA 200 und RSI(2) < 10,
-//     Ausstieg Schluss über SMA 5 oder nach 10 Tagen, Not-Stop 2,5 ATR.
+//  2) RSI-2-RÜCKKEHR (Tag) – S&P 500, Nasdaq 100, Dow Jones, nur Kauf: Schluss über SMA 200 und RSI(2) < 10,
+//     Ausstieg Schluss über SMA 5 oder nach 10 Tagen, Not-Stop 2,5 ATR. 10-Jahres-Test (22.11.2026): nur US-Indizes in beiden
+//     Phasen ≥ 0 (DAX, FTSE, CAC u. a. negativ) – kleiner Vorteil, daher HALBES Risiko (riskMul 0,5).
+//  Forex: 5 Strategie-Familien auf 10 Paaren getestet (Trendfolge, RSI-2, Bollinger, London-Ausbruch, Rücksetzer) – keine profitabel → nur Beobachtung.
 // Alle anderen Märkte: nur beobachten.
 'use strict';
 const T = require('./ta'), U = require('./util'), M = require('./market'), I = require('./instruments');
-const PLAY = { XAUUSD: 'trend', XAGUSD: 'trend', BTCUSD: 'trend', ETHUSD: 'trend', US500: 'rsi2', NAS100: 'rsi2', GER40: 'rsi2' };
+const PLAY = { XAUUSD: 'trend', XAGUSD: 'trend', BTCUSD: 'trend', ETHUSD: 'trend', US500: 'rsi2', NAS100: 'rsi2', US30: 'rsi2' };
+const RISK_MUL = { trend: 1, rsi2: .5 };   // Risiko-Faktor je Strategie (Stärke des nachgewiesenen Vorteils)
 const NAME = { trend: 'Trend-Rücksetzer', rsi2: 'RSI-2-Rückkehr' };
 const P = { stopA: 2, trailA: 3.5, rsiMax: 65, touchA: .2, maxHoldH: 240, rsi2Lvl: 10, rsi2Exit: 5, rsi2Stop: 2.5, rsi2MaxD: 10 };
 const FIN = sym => { const t = I.get(sym).type; return t === 'crypto' ? .20 : t === 'fx' ? .03 : .06; };   // Finanzierung p.a. auf den Positionswert
@@ -45,4 +48,4 @@ function plan(sym, m, sig, entry) {
   const risk = sig.stopDist, stop = entry - sig.dir * risk, rr = sig.play === 'rsi2' ? 5 : 10, target = entry + sig.dir * rr * risk, mcTarget = entry + sig.dir * 3 * risk;
   return { entry, stop, target, mcTarget, risk, rr, obstacle: null, obstacleR: null, atr: sig.atr, exit: sig.play === 'trend' ? `Trailing ${P.trailA} ATR vom besten Schlusskurs, max. ${P.maxHoldH} h` : `Schluss über SMA ${P.rsi2Exit} oder nach ${P.rsi2MaxD} Tagen` };
 }
-module.exports = { PLAY, NAME, P, FIN, playOf, signal, plan, trendAt, rsi2At, dailyTrendFn, dailySeries, lastClosedDaily };
+module.exports = { RISK_MUL, PLAY, NAME, P, FIN, playOf, signal, plan, trendAt, rsi2At, dailyTrendFn, dailySeries, lastClosedDaily };

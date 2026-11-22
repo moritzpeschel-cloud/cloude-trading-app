@@ -50,5 +50,12 @@ const U = require('./bot/util'), T = require('./bot/ta'), MC = require('./bot/mo
   const H2 = require('./bot/helpers'), mx = E._S.markets.ETHUSD, px0 = mx.h1[mx.h1.length - 30].c;
   const fake = { sym: 'ETHUSD', dir: 1, entry: px0, sl: px0 * .5, sl0: px0 * .5, open: mx.h1[mx.h1.length - 30].t };
   const acts = H2.manage([fake], E._S.markets, E._S.analysts, E.cfg(), Date.now()); assert.ok(fake.sl > px0 * .5, 'Trailing-Stop nachgezogen'); assert.ok(acts.length >= 1);
+  // halbes Risiko für RSI-2, Verlust-Bremse
+  const ctxB = { cfg: E.cfg(), eq: 10000 }, plB = { risk: 50, entry: 6000 }, tmB = { bt: { winrate: .6, avgW: 1, avgL: 1 } };
+  const bT = H2.budget('XAUUSD', { risk: 20, entry: 2700 }, tmB, ctxB), bR = H2.budget('US500', plB, tmB, ctxB); assert.equal(bT.mul, 1); assert.equal(bR.mul, .5, 'RSI-2 mit halbem Risiko');
+  const bD = H2.budget('US500', plB, tmB, { ...ctxB, ddMul: .5 }); assert.equal(bD.mul, .25, 'Verlust-Bremse halbiert');
+  const rk = H2.risiko('XAUUSD', { dir: 1, tf: '1h' }, { risk: 20 }, { adj: { evR: .3 }, edge: .3, bt: { n: 30 } }, { bias: .5 }, {}, { cfg: E.cfg(), acc: { dayStart: { eq: 10000 }, orders: [] }, eq: 10000, positions: [], open: true, dd: .22 });
+  assert.ok(!rk.ok && rk.checks.some(c => c.name === 'Verlust-Bremse' && !c.ok), 'ab 20 % Rückgang Pause');
+  assert.ok(E.snapshot().perf && E.snapshot().perf.status, 'Leistungs-Check im Snapshot');
   console.log('trader-skill: alle Tests bestanden'); process.exit(0);
 })().catch(e => { console.error('FEHLER', e); process.exit(1); });
