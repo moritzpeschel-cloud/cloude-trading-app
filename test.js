@@ -52,7 +52,7 @@ const j = (p, o = {}) => fetch(B + p, { ...o, headers: { 'Content-Type': 'applic
     assert.equal(GOT[0].key, key); assert.equal(GOT[0].msg.title, ev.title); assert.equal(GOT[0].msg.color, 'red'); assert.ok(GOT[0].msg.icon.includes('notify-red'));
     assert.equal((await (await j('/api/event', { method: 'POST', body: JSON.stringify(ev), headers: P })).json()).dup, true); assert.equal(GOT.length, 1);   // keine Doppelten
     await j('/api/event', { method: 'POST', body: JSON.stringify({ ...ev, id: 'close:43', pnl: 12.34, title: '🟢 +12,34 €' }), headers: P }); assert.equal(GOT[1].msg.color, 'green');
-    const evs = (await (await j('/api/events', { headers: S })).json()).events; assert.equal(evs[0].id, 'close:43'); assert.equal(evs.length, 2);
+    const evs = (await (await j('/api/events', { headers: S })).json()).events; const mine = evs.filter(e => /^close:4[23]$/.test(e.id)); assert.equal(mine[0].id, 'close:43'); assert.equal(mine.length, 2);   // nur Test-Mitteilungen zählen (der Bot kann parallel im Simulator handeln)
     const bk = await (await j('/api/push/subs', { headers: P })).json(); assert.equal(bk.subs.length, 1); assert.equal(bk.vapid, key);
     assert.equal((await j('/api/push/subs', { headers: S })).status, 401);
     await j('/api/push/restore', { method: 'POST', body: JSON.stringify({ subs: [{ ...sub, endpoint: 'http://127.0.0.1:3998/gone' }] }), headers: P });

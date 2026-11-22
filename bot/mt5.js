@@ -18,14 +18,19 @@ const ccyRate = () => { const c = S.account && S.account.currency; return !c || 
 const toAcc = eur => eur * ccyRate(), toEur = v => v / ccyRate();
 const off = sym => S.offset[sym] || 0;
 const cmd = c => { c.id = 'c' + (S.seq++); c.t = Date.now(); S.queue.push(c); save(); return c; };
+// Order-Kommentar trägt Strategie, Risiko (€) und Stop-Abstand – so kennt der Bot seine MT5-Trades auch nach einem Server-Neustart
+// (Render Free löscht /tmp). Format: TS<T|R>|<risiko>|<stopabstand>, max. 26 Zeichen.
+const CODE = { 'Trend-Rücksetzer': 'T', 'RSI-2-Rückkehr': 'R' }, NAMEOF = { T: 'Trend-Rücksetzer', R: 'RSI-2-Rückkehr' };
+const enc = (by, riskEur, sl0Dist) => `TS${CODE[by] || 'X'}|${(+riskEur || 0).toFixed(2)}|${+(+sl0Dist).toPrecision(6)}`.slice(0, 26);
+function dec(c) { const m = /^TS([TRX])\|([\d.]+)\|([\d.eE+-]+)/.exec(String(c || '')); return m ? { by: NAMEOF[m[1]] || 'MT5', riskEur: +m[2] || null, sl0Dist: +m[3] || null } : null; }
 // ---------- Schnittstelle wie broker.js ----------
 function open({ sym, dir, sl, tp, mid, by, plan, meta, riskEur }) {
-  const c = cmd({ cmd: 'open', type: 'market', sym, dir, slDist: Math.abs(mid - sl), tpDist: Math.abs(tp - mid), risk: U.round(toAcc(riskEur || 0), 2), magic: MAGIC, comment: ('TS ' + (by || '')).slice(0, 26) });
+  const c = cmd({ cmd: 'open', type: 'market', sym, dir, slDist: Math.abs(mid - sl), tpDist: Math.abs(tp - mid), risk: U.round(toAcc(riskEur || 0), 2), magic: MAGIC, comment: enc(by, riskEur, Math.abs(mid - sl)) });
   S.meta[c.id] = { by, meta, sl0Dist: Math.abs(mid - sl), riskEur };
   return { id: c.id, sym, dir, lots: '≈', entry: mid, sl, tp, queued: true };
 }
 function placeLimit({ sym, dir, limit, sl, tp, by, plan, meta, riskEur, ttl = 6 * 3600e3 }) {
-  const c = cmd({ cmd: 'open', type: 'limit', sym, dir, price: limit + off(sym), slDist: Math.abs(limit - sl), tpDist: Math.abs(tp - limit), risk: U.round(toAcc(riskEur || 0), 2), magic: MAGIC, expires: Date.now() + ttl, comment: ('TS ' + (by || '')).slice(0, 26) });
+  const c = cmd({ cmd: 'open', type: 'limit', sym, dir, price: limit + off(sym), slDist: Math.abs(limit - sl), tpDist: Math.abs(tp - limit), risk: U.round(toAcc(riskEur || 0), 2), magic: MAGIC, expires: Date.now() + ttl, comment: enc(by, riskEur, Math.abs(limit - sl)) });
   S.meta[c.id] = { by, meta, sl0Dist: Math.abs(limit - sl), riskEur, expires: c.expires };
   return { id: c.id, sym, dir, limit, sl, tp, queued: true };
 }
@@ -69,17 +74,19 @@ function sync(b, ourPrices = {}) {
     else if (!r.ok) S.events.push({ type: 'reject', c, error: String(r.error || 'Fehler').slice(0, 140) }); }
   // Positionen (nur eigene Magic)
   const prev = new Map(S.positions.map(p => [p.id, p]));
-  S.positions = (b.positions || []).filter(x => x.magic === MAGIC && I.get(x.sym)).map(x => { const p = prev.get(x.ticket) || {}, m = S.meta['t' + x.ticket] || S.meta['p' + x.ticket] || {}, o = off(x.sym), dir = x.type === 0 ? 1 : -1;
+  S.positions = (b.positions || []).filter(x => x.magic === MAGIC && I.get(x.sym)).map(x => { const p = prev.get(x.ticket) || {}, m = S.meta['t' + x.ticket] || dec(x.comment) || {}, o = off(x.sym), dir = x.type === 0 ? 1 : -1;
     const entry = x.price_open - o, sl0Dist = m.sl0Dist || Math.abs(x.price_open - (x.sl || x.price_open)) || 1, upnl = toEur((+x.profit || 0) + (+x.swap || 0));
     const riskEur = m.riskEur || p.riskEur || null;
-    const q = Object.assign(p, { id: x.ticket, sym: x.sym, dir, lots: x.volume, entry, sl: x.sl ? x.sl - o : entry - dir * sl0Dist, tp: x.tp ? x.tp - o : null, sl0: entry - dir * sl0Dist, open: x.time * 1000, last: (x.price_current || x.price_open) - o, upnl: U.round(upnl, 2), by: m.by || x.comment || 'MT5', meta: m.meta, riskEur, broker: x.symbol });
+    const q = Object.assign(p, { id: x.ticket, sym: x.sym, dir, lots: x.volume, entry, sl: x.sl ? x.sl - o : entry - dir * sl0Dist, tp: x.tp ? x.tp - o : null, sl0: entry - dir * sl0Dist, open: x.time * 1000, last: (x.price_current || x.price_open) - o, upnl: U.round(upnl, 2), by: m.by || 'MT5', meta: m.meta, riskEur, broker: x.symbol });
     q._brokerSl = x.sl || null; if (q.be == null) q.be = dir * ((x.sl || 0) - x.price_open) >= 0 && !!x.sl; q.maxR = Math.max(q.maxR || 0, dir * (q.last - entry) / sl0Dist); return q; });
   S.orders = (b.orders || []).filter(x => x.magic === MAGIC && I.get(x.sym)).map(x => ({ id: x.ticket, sym: x.sym, dir: x.type % 2 === 0 ? 1 : -1, lots: x.volume, limit: x.price - off(x.sym), sl: x.sl - off(x.sym), tp: x.tp - off(x.sym), by: (x.comment || '').replace(/^TS /, ''), expires: (S.meta['t' + x.ticket] || {}).expires || null, dp: I.get(x.sym).dp }));
   // geschlossene Trades
-  for (const h of b.closed || []) { if (h.magic !== MAGIC || S.seen.includes(h.position)) continue; S.seen.push(h.position); if (S.seen.length > 2000) S.seen = S.seen.slice(-1000);
+  // erste Meldung nach einem frischen Start: alte geschlossene Trades still übernehmen (keine doppelten Push-Mitteilungen)
+  const quiet = !S.importDone; S.importDone = true;
+  for (const h of (b.closed || []).slice().sort((x, y) => x.time - y.time)) { if (h.magic !== MAGIC || S.seen.includes(h.position)) continue; S.seen.push(h.position); if (S.seen.length > 2000) S.seen = S.seen.slice(-1000);
     const m = S.meta['t' + h.position] || {}, o = off(h.sym), pnl = U.round(toEur(h.pnl), 2);
     const rec = { id: h.position, sym: h.sym, dir: h.dir, lots: h.volume, entry: h.entry - o, exit: h.exit - o, sl: null, tp: null, open: h.time_open * 1000, close: h.time * 1000, pnl, R: m.sl0Dist ? U.round(h.dir * (h.exit - h.entry) / m.sl0Dist, 2) : null, reason: h.reason || 'geschlossen', by: m.by || 'MT5', meta: m.meta };
-    S.hist.unshift(rec); S.hist = S.hist.slice(0, 500); delete S.meta['t' + h.position]; S.events.push({ type: 'close', h: rec }); }
+    S.hist.unshift(rec); S.hist = S.hist.slice(0, 500); delete S.meta['t' + h.position]; if (!quiet) S.events.push({ type: 'close', h: rec }); }
   save(); return { ok: true, ...poll() };
 }
 const ensure = () => { if (!S) load(); };

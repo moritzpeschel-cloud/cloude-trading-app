@@ -82,6 +82,11 @@ async function analyze(sym, sigIn = null, ctx = null) {
   if (!hypo && tm.bt && tm.bt.n >= 15) { S.expect = S.expect || {}; S.expect[sym] = tm.bt.avgR; }
   if (!B.acc()) B.load(CFG.startBalance); const acc = B.acc(), prices = priceMap(), eq = B.equity(prices);
   ctx = ctx || { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk(), own: ownBook(), ...ddState(eq) };
+  // Kurssprung-Pause: bewegte sich der Markt in einer der letzten 2 Stundenkerzen > 3 ATR, 2 h lang keine neuen Einstiege in diesem Markt
+  { const b = m.h1, j = H.lastClosed(b); let shock = { on: false, atr: 0, leftMin: 0 };
+    for (let k = j; k > j - 2 && k > 15; k--) { const a14 = m.s.atr[k - 1], mv = Math.abs(b[k].c - b[k - 1].c) / (a14 || Infinity), left = Math.round((b[k].t + 3 * 3600e3 - now) / 60e3);
+      if (mv > 3 && left > 0) { shock = { on: true, atr: mv, leftMin: left }; break; } }
+    ctx = { ...ctx, shock }; }
   const bu = H.budget(sym, plan, tm, ctx), rk = H.risiko(sym, sig, plan, tm, an, nw, { ...ctx, newRisk: bu.riskEur });
   // Gesamtnote 0..100 (wie stark stimmen die Helfer überein?)
   const al = x => U.clamp(x * sig.dir, -1, 1);
@@ -229,4 +234,5 @@ const mt5Sync = b => { const r = MT5.sync(b, priceMap());
 // öffentlicher Kurzstatus (ohne Kontonummer/Server): für /healthz
 const mt5Health = () => { const st = MT5.status(), d = st.diag || {}, ago = t => t ? Math.round((Date.now() - t) / 1000) : null;
   return { mode: CFG.broker, connected: !!st.connected, lastSyncS: ago(st.lastSync), lastPollS: ago(d.poll), lastHelloS: ago(d.hello), tokenFailS: ago(d.authFail), problem: st.blocked || d.bridgeError || null }; };
-module.exports = { mt5Health, mt5Note: o => MT5.note(o), mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };
+const calHealth = () => { const N = require('./news'), c = N.calendarPause(); return { ok: c.ok, paused: c.paused, next: c.next ? { title: c.next.title, t: new Date(c.next.t).toISOString() } : null, note: c.note }; };
+module.exports = { calHealth, mt5Health, mt5Note: o => MT5.note(o), mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };

@@ -19,6 +19,11 @@ const META = [
 const lastClosed = bars => bars.length && bars[bars.length - 1].live ? bars.length - 2 : bars.length - 1;
 function agg(bars, n) { const o = []; for (let i = 0; i + n <= bars.length; i += n) { const g = bars.slice(i, i + n); o.push({ t: g[0].t, o: g[0].o, h: Math.max(...g.map(b => b.h)), l: Math.min(...g.map(b => b.l)), c: g[g.length - 1].c, v: g.reduce((s, b) => s + (b.v || 0), 0) }); } return o; }
 
+// Mindest-Risiko: Was verliert schon die kleinste erlaubte Positionsgröße bei normalem Stop? (wie trader-budget: der Stop bestimmt die Größe)
+function minRisk(sym, m, play, cfg) { if (!play) return {}; const inst = I.get(sym);
+  let stop; if (play === 'trend') { const i = lastClosed(m.h1); stop = S.P.stopA * m.s.atr[i]; } else { const a = T.atr(m.d1, 14); stop = S.P.rsi2Stop * a[a.length - 1]; }
+  const eur = Math.abs(B.toEur(sym, stop * inst.cs * inst.min, m.price)); const lim = cfg.riskMode === 'eur' ? cfg.riskEur : null;
+  return { minRiskEur: isFinite(eur) ? U.round(eur, 2) : null, tradeable: lim == null || eur <= lim }; }
 // 1 · SCANNER – alle Symbole, Rangliste
 function scanner(markets, cfg) {
   const rows = [];
@@ -26,7 +31,7 @@ function scanner(markets, cfg) {
     const b = m.h1, s = m.s, i = lastClosed(b); if (i < 210) continue;
     const sig = S.signal(sym, m), c = m.price, d24 = b[Math.max(0, b.length - 25)].c, play = S.playOf(sym);
     rows.push({ sym, name: I.get(sym).name, price: c, dp: I.get(sym).dp, chg: (c - d24) / d24, rsi: s.rsi[i], adx: s.adx.adx[i], atrPct: s.atr[i] / c, open: m.open, src: m.src,
-      play: play ? S.NAME[play] : null, sig: sig ? { dir: sig.dir, setup: sig.setup, q: sig.q, tf: sig.tf } : null, bar: sig ? sig.t : b[i].t, spark: b.slice(-48).map(x => +x.c.toPrecision(6)) });
+      play: play ? S.NAME[play] : null, ...minRisk(sym, m, play, cfg), sig: sig ? { dir: sig.dir, setup: sig.setup, q: sig.q, tf: sig.tf } : null, bar: sig ? sig.t : b[i].t, spark: b.slice(-48).map(x => +x.c.toPrecision(6)) });
   }
   rows.sort((a, b) => (b.sig ? b.sig.q : -1) - (a.sig ? a.sig.q : -1) || Math.abs(b.chg) - Math.abs(a.chg));
   const cand = rows.filter(r => r.sig && r.sig.q >= cfg.minScore && r.open);
@@ -50,7 +55,10 @@ function analyst(sym, m) {
 async function news(sym, now) {
   const r = await N.fetchNews(sym, now), st = N.sentiment(r.items, now);
   const word = st.score > .25 ? 'positiv' : st.score < -.25 ? 'negativ' : 'neutral';
-  return { s: r.ok ? 'done' : 'idle', t: r.ok ? (st.breaking ? `EILMELDUNG: ${st.breaking.title.slice(0, 70)}` : `${st.n} Schlagzeilen · Stimmung ${word}`) : r.note, score: st.score, breaking: st.breaking, items: r.items.slice(0, 8), ok: r.ok };
+  await N.refreshCalendar(now); const cal = N.calendarPause(now), hm = t => new Date(t).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' }), dm = t => new Date(t).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  const calTxt = cal.paused ? `NEWS-PAUSE bis ${hm(cal.until)}: ${cal.event.title} (${cal.event.cur})` : cal.next ? `nächster wichtiger Termin: ${cal.next.title} ${dm(cal.next.t)}` : (cal.note || 'keine wichtigen USD-Termine diese Woche');
+  const headTxt = r.ok ? (st.breaking ? `EILMELDUNG: ${st.breaking.title.slice(0, 70)}` : `${st.n} Schlagzeilen · Stimmung ${word}`) : r.note;
+  return { s: cal.paused ? 'wait' : r.ok ? 'done' : 'idle', t: cal.paused ? calTxt : `${headTxt} · ${calTxt}`, cal, score: st.score, breaking: st.breaking, items: r.items.slice(0, 8), ok: r.ok };
 }
 // 4 · KONGRESS
 function kongress(sym) {
@@ -119,6 +127,8 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
   if (sig.tf === '1d') add(true, 'Großer Trend intakt', 'Schluss über SMA 200 (Teil des Signals)');
   else add(an.bias * sig.dir > -.3, 'Nicht gegen den großen Trend', `Analyst ${an.bias >= 0 ? '+' : ''}${an.bias.toFixed(2)}`);
   add(!(nw.breaking && nw.breaking.s * sig.dir < 0), 'Keine Gegen-Eilmeldung', nw.breaking ? nw.breaking.title.slice(0, 50) : 'keine');
+  if (nw.cal) add(!nw.cal.paused, 'Keine wichtigen Wirtschafts-Termine', nw.cal.paused ? `Pause: ${nw.cal.event.title} (${N.PAUSE_BEFORE} Min. vorher bis ${N.PAUSE_AFTER} Min. nachher)` : nw.cal.ok ? 'frei' : (nw.cal.note || 'Kalender nicht verfügbar'));
+  if (ctx.shock) add(!ctx.shock.on, 'Keine Kurssprung-Pause', ctx.shock.on ? `${ctx.shock.atr.toFixed(1)} ATR in einer Kerze – ${ctx.shock.leftMin} Min. Pause` : 'ruhig');
   add(inst.spread / plan.risk < .12, 'Spread-Kosten', `${(inst.spread / plan.risk * 100).toFixed(1)} % des Risikos`);
   add(tm.adj.evR >= cfg.minEV, 'Erwartungswert (Rückblick)', `${tm.adj.evR >= 0 ? '+' : ''}${tm.adj.evR.toFixed(2)} R je Trade nach Kosten (min. ${cfg.minEV} R)`);
   add(tm.edge == null || tm.edge > 0, 'Regeln historisch profitabel', tm.edge == null ? 'zu wenig Historie – neutral' : `Ø ${tm.edge.toFixed(2)} R in ${tm.bt.n} Trades`);

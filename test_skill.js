@@ -72,5 +72,27 @@ const U = require('./bot/util'), T = require('./bot/ta'), MC = require('./bot/mo
   assert.ok(!chk({ entriesToday: 10 }, 1).ok, 'max. 10 Trades je Tag');
   assert.ok(!chk({ symsToday: ['ETHUSD'] }, 1).ok, 'kein 2. Einstieg im selben Markt am selben Tag');
   assert.ok(E.snapshot().own && typeof E.snapshot().own.openRisk === 'number', 'eigene Tagesbilanz im Snapshot');
+  // News-Pause: Wirtschaftskalender (Forex-Factory-Format) + Kurssprung
+  const N2 = require('./bot/news'), t0 = Date.parse('2026-11-25T13:30:00Z');
+  const ev = N2.parseCalendar([{ title: 'Core CPI m/m', country: 'USD', date: '2026-11-25T08:30:00-05:00', impact: 'High' }, { title: 'German Ifo', country: 'EUR', date: '2026-11-25T04:00:00-05:00', impact: 'High' }, { title: 'Crude Oil Inventories', country: 'USD', date: '2026-11-25T10:30:00-05:00', impact: 'Medium' }]);
+  assert.equal(ev.length, 1, 'nur hochwichtige USD-Termine'); assert.equal(ev[0].t, t0);
+  assert.ok(N2.calendarPause(t0 - 31 * 60e3, ev).paused === false && N2.calendarPause(t0 - 29 * 60e3, ev).paused, '30 Min. vorher Pause');
+  assert.ok(N2.calendarPause(t0 + 59 * 60e3, ev).paused && !N2.calendarPause(t0 + 61 * 60e3, ev).paused, 'bis 60 Min. nachher');
+  const calP = N2.calendarPause(t0, ev), rkCal = H2.risiko(...okArgs, { ...base, own: { realizedLoss: 0, openRisk: 0, entriesToday: 0, symsToday: [] }, newRisk: 4 }).ok;
+  assert.ok(rkCal, 'ohne Termin frei');
+  const argsCal = [...okArgs]; argsCal[5] = { cal: calP };
+  const rkPause = H2.risiko(...argsCal, { ...base, own: { realizedLoss: 0, openRisk: 0, entriesToday: 0, symsToday: [] }, newRisk: 4 });
+  assert.ok(!rkPause.ok && rkPause.checks.some(c => /Wirtschafts-Termine/.test(c.name) && !c.ok), 'Termin → keine neuen Einstiege');
+  const rkShock = H2.risiko(...okArgs, { ...base, own: { realizedLoss: 0, openRisk: 0, entriesToday: 0, symsToday: [] }, newRisk: 4, shock: { on: true, atr: 3.4, leftMin: 90 } });
+  assert.ok(!rkShock.ok && rkShock.checks.some(c => /Kurssprung/.test(c.name)), 'Kurssprung → Pause');
+  // MT5 nach Server-Neustart: Daten aus dem Order-Kommentar, alte Trades still übernehmen
+  const MT = require('./bot/mt5'); MT.load();
+  const acct = { login: 1, server: 'x', currency: 'EUR', balance: 1e5, equity: 1e5, trade_mode: 'DEMO' };
+  const old = { position: 77, sym: 'ETHUSD', dir: 1, volume: .18, entry: 1700, exit: 1680, pnl: -4.2, time_open: 1, time: 2, reason: 'Grenze (Stop)', magic: MT.MAGIC };
+  MT.sync({ account: acct, positions: [{ ticket: 88, symbol: 'ETHUSD', sym: 'ETHUSD', type: 0, volume: .18, price_open: 1766, price_current: 1770, sl: 1733.75, tp: 2100, profit: .7, swap: 0, time: 1, magic: MT.MAGIC, comment: 'TST|4.89|32.25' }], orders: [], closed: [old], prices: {} }, {});
+  const pp = MT.acc().pos[0]; assert.equal(pp.riskEur, 4.89, 'Risiko aus Kommentar'); assert.equal(pp.by, 'Trend-Rücksetzer'); assert.ok(Math.abs(pp.sl0 - (1766 - 32.25)) < 1e-6, 'Stop-Abstand aus Kommentar');
+  assert.equal(MT.tick({}).length, 0, 'alte Trades nach Neustart ohne Push'); assert.equal(MT.acc().hist.length, 1);
+  MT.sync({ account: acct, positions: [], orders: [], closed: [old, { ...old, position: 88, time: 3 }], prices: {} }, {});
+  const evs = MT.tick({}); assert.equal(evs.length, 1, 'neuer geschlossener Trade meldet sich'); assert.equal(evs[0].h.id, 88);
   console.log('trader-skill: alle Tests bestanden'); process.exit(0);
 })().catch(e => { console.error('FEHLER', e); process.exit(1); });
