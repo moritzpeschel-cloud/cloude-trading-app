@@ -80,6 +80,9 @@ const j = (p, o = {}) => fetch(B + p, { ...o, headers: { 'Content-Type': 'applic
     assert.equal((await j('/api/skill/control', { method: 'POST', body: '{"action":"rm -rf"}', headers: S })).status, 400);
     assert.equal((await j('/api/skill/alarm', { method: 'POST', body: '{"sym":"EURUSD","price":2}', headers: S })).status, 200);
     assert.equal((await (await j('/api/skill', { headers: S })).json()).alarms.length, 1);
+    assert.equal((await j('/api/skill/report')).status, 401, 'Tagesbericht nur mit Anmeldung');
+    const rr = await (await j('/api/skill/report/run', { method: 'POST', body: '{}', headers: S })).json(); assert.ok(rr.report && rr.report.date && Array.isArray(rr.report.findings), 'Bericht von Hand');
+    assert.ok((await (await j('/api/skill/report', { headers: P })).json()).reports.length >= 1, 'Bericht per Bot-Token lesbar');
     const csp = (await fetch(B + '/')).headers.get('content-security-policy'); assert.ok(csp.includes("script-src 'self'"));
     for (const f of ['/app.js', '/charts.js', '/robots.js', '/style.css', '/sw.js', '/icons/icon-192.png']) assert.equal((await fetch(B + f)).status, 200, f);
     assert.ok(!(await (await fetch(B + '/bot/engine.js')).text()).includes('module.exports'), 'Server-Code nie ausliefern');

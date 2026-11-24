@@ -98,6 +98,8 @@ const server = http.createServer(async (req, res) => {
       if (!((API_TOKEN && eq(bt, API_TOKEN)) || valid(bt))) return send(res, 401, { error: 'Anmeldung nötig' });
       if (!engine) return send(res, 503, { error: 'Engine ist aus (ENGINE=off)' });
       if (p === '/api/skill' && req.method === 'GET') return send(res, 200, engine.snapshot());
+      if (p === '/api/skill/report' && req.method === 'GET') return send(res, 200, { reports: engine.reports(), now: Date.now() });
+      if (p === '/api/skill/report/run' && req.method === 'POST') return send(res, 200, { report: await engine.dailyReport(true) });
       if (p === '/api/skill/analyze' && req.method === 'GET') {
         const sym = String(u.searchParams.get('sym') || '').toUpperCase(), c = ANA.get(sym);
         if (c && Date.now() - c.t < 30e3) return send(res, 200, c.r);

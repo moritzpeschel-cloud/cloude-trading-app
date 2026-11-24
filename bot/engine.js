@@ -5,7 +5,7 @@
 'use strict';
 const fs = require('fs'), path = require('path');
 const M = require('./market'), T = require('./ta'), H = require('./helpers'), PAPER = require('./broker'), MT5 = require('./mt5'), I = require('./instruments'), U = require('./util');
-const K = require('./congress'), AI = require('./claude');
+const K = require('./congress'), AI = require('./claude'), DAILY = require('./daily');
 const DIR = process.env.DATA_DIR || '/tmp/cloude-skill', CFG_FILE = path.join(DIR, 'config.json'), AL_FILE = path.join(DIR, 'alarms.json');
 let B = PAPER;
 const DEF = { broker: process.env.BROKER === 'mt5' ? 'mt5' : 'paper', auto: true, kill: false, riskMode: 'eur', riskEur: 5, maxDailyLossEur: 10, maxTradesDay: 10, riskPct: 0.5, maxDailyLossPct: 3, maxOpen: 4, maxPerGroup: 2, maxLeverage: 10, minScore: 0.62, minEV: 0.05, rr: 2, horizon: 48, mcRuns: 10000, claude: false, startBalance: 10000, intervalS: 60 };
@@ -82,6 +82,7 @@ async function analyze(sym, sigIn = null, ctx = null) {
   if (!hypo && tm.bt && tm.bt.n >= 15) { S.expect = S.expect || {}; S.expect[sym] = tm.bt.avgR; }
   if (!B.acc()) B.load(CFG.startBalance); const acc = B.acc(), prices = priceMap(), eq = B.equity(prices);
   ctx = ctx || { cfg: CFG, acc, eq, positions: acc.pos, open: m.open, broker: brokerOk(), own: ownBook(), ...ddState(eq) };
+  ctx = { ...ctx, autoPause: DAILY.pausedUntil(sym) };
   // Kurssprung-Pause: bewegte sich der Markt in einer der letzten 2 Stundenkerzen > 3 ATR, 2 h lang keine neuen Einstiege in diesem Markt
   { const b = m.h1, j = H.lastClosed(b); let shock = { on: false, atr: 0, leftMin: 0 };
     for (let k = j; k > j - 2 && k > 15; k--) { const a14 = m.s.atr[k - 1], mv = Math.abs(b[k].c - b[k - 1].c) / (a14 || Infinity), left = Math.round((b[k].t + 3 * 3600e3 - now) / 60e3);
@@ -120,6 +121,7 @@ async function cycle() {
       if (e.type === 'close') { const h = e.h; log(`${h.sym} ${side(h.dir)} geschlossen · ${h.reason} · ${eur(h.pnl)} (${h.R >= 0 ? '+' : ''}${h.R} R)`, [{ n: 'Ausstieg', e: h.reason }], h.pnl >= 0 ? 'win' : 'loss', h.sym);
         NOTIFY({ id: 'close:' + h.id, kind: 'close', pnl: h.pnl, title: `${h.pnl >= 0 ? '🟢' : '🔴'} ${eur(h.pnl)} · ${h.sym} ${h.dir > 0 ? 'BUY' : 'SELL'}`, body: `Geschlossen · ${h.reason} · ${h.R >= 0 ? '+' : ''}${h.R} R`, symbol: h.sym, side: h.dir > 0 ? 'BUY' : 'SELL' }); }
       if (e.type === 'fill') { log(`${e.p.sym}: ${B.mode === 'mt5' ? 'MT5 hat ausgeführt' : 'Limit-Order ausgeführt'} · ${side(e.p.dir)} ${e.p.lots} @ ${fmt(e.p.sym, e.p.entry)}`, [{ n: 'Broker', e: 'Fill' }], 'open', e.p.sym); NOTIFY({ id: 'open:' + e.p.id, kind: 'open', title: `📈 ${e.p.sym} ${e.p.dir > 0 ? 'BUY' : 'SELL'} ${e.p.lots} @ ${fmt(e.p.sym, e.p.entry)}`, body: `Limit gefüllt · Ziel ${fmt(e.p.sym, e.p.tp)} · Grenze ${fmt(e.p.sym, e.p.sl)}`, symbol: e.p.sym }); }
+      if (e.type === 'reject') DAILY.note('reject', { why: e.error });
       if (e.type === 'reject') { log(`${e.c.sym}: MT5 hat den Auftrag abgelehnt (${e.c.cmd}) – ${e.error}`, [{ n: 'Broker', e: 'abgelehnt' }], 'skip', e.c.sym); NOTIFY({ id: 'rej:' + e.c.id, kind: 'alert', color: 'red', title: `⚠️ MT5 lehnt ${e.c.sym} ab`, body: e.error }); }
       if (e.type === 'expire') log(`${e.o.sym}: Limit-Order verfallen (Kurs kam nicht zurück)`, [{ n: 'Einstieg', e: 'verfallen' }], 'info', e.o.sym);
     }
@@ -174,7 +176,9 @@ async function cycle() {
     // Alarm
     await alarms(prices, eq);
     S.error = null;
-  } catch (e) { S.error = String(e.message || e).slice(0, 120); console.warn('cycle', e); for (const k of Object.keys(S.helpers)) if (S.helpers[k].s === 'working') S.helpers[k].s = 'error'; }
+    DAILY.note('cycle', { mt5: B.mode === 'mt5', connected: MT5.connected(), intervalS: CFG.intervalS });
+    if (DAILY.due()) await dailyReport();
+  } catch (e) { S.error = String(e.message || e).slice(0, 120); console.warn('cycle', e); DAILY.note('cycle', { error: S.error, intervalS: CFG.intervalS }); for (const k of Object.keys(S.helpers)) if (S.helpers[k].s === 'working') S.helpers[k].s = 'error'; }
   finally { S.lastMs = Date.now() - t0; S.last = Date.now(); S.gen = Math.floor(Date.now() / 1000); BUSY = false; }
 }
 // ---------- Alarm-Helfer ----------
@@ -215,7 +219,7 @@ function snapshot() {
     pos: acc.pos.map(p => ({ id: p.id, sym: p.sym, dir: p.dir, lots: p.lots, entry: p.entry, sl: p.sl, tp: p.tp, sl0: p.sl0, open: p.open, upnl: p.upnl, last: p.last, by: p.by, be: p.be, dp: I.get(p.sym).dp, R: U.round(p.dir * (p.last - p.entry) / Math.abs(p.entry - p.sl0), 2), meta: p.meta })),
     orders: acc.orders.map(o => ({ id: o.id, sym: o.sym, dir: o.dir, lots: o.lots, limit: o.limit, sl: o.sl, tp: o.tp, expires: o.expires, by: o.by, dp: I.get(o.sym).dp })),
     hist: acc.hist.slice(0, 60).map(h => ({ ...h, dp: I.get(h.sym) ? I.get(h.sym).dp : 2 })),
-    perf: perfCheck(), dd: ddState(eq), own: { today: U.round(ob.today, 2), total: U.round(ob.total, 2), realizedLoss: U.round(ob.realizedLoss, 2), openRisk: U.round(ob.openRisk, 2), entriesToday: ob.entriesToday, ddEur: U.round(ob.ddEur, 2) },
+    perf: perfCheck(), dd: ddState(eq), daily: { last: DAILY.reports()[0] || null, paused: DAILY.pauses(), hour: DAILY.REPORT_HOUR }, own: { today: U.round(ob.today, 2), total: U.round(ob.total, 2), realizedLoss: U.round(ob.realizedLoss, 2), openRisk: U.round(ob.openRisk, 2), entriesToday: ob.entriesToday, ddEur: U.round(ob.ddEur, 2) },
     scanner: S.scanner, focus: f, journal: S.journal.slice(0, 60), alarms: ALARMS.filter(a => !a.done), alarmLog: S.alarmLog.slice(0, 20), kongress: { ...K.state(), latest: K.latest(12) } };
 }
 function start({ notify } = {}) {
@@ -234,5 +238,14 @@ const mt5Sync = b => { const r = MT5.sync(b, priceMap());
 // öffentlicher Kurzstatus (ohne Kontonummer/Server): für /healthz
 const mt5Health = () => { const st = MT5.status(), d = st.diag || {}, ago = t => t ? Math.round((Date.now() - t) / 1000) : null;
   return { mode: CFG.broker, connected: !!st.connected, lastSyncS: ago(st.lastSync), lastPollS: ago(d.poll), lastHelloS: ago(d.hello), tokenFailS: ago(d.authFail), problem: st.blocked || d.bridgeError || null }; };
+// Tagesbericht (07:00 Berlin): Vortag auswerten, schützende Maßnahmen, Push aufs Handy
+async function dailyReport(manual = false) {
+  const N = require('./news'); const rep = DAILY.build({ hist: B.acc().hist || [], journal: S.journal, expect: S.expect || {}, perf: perfCheck(), cfg: CFG, mode: B.mode === 'mt5' ? 'mt5' : 'paper', cal: N.calendarPause(), scanner: S.scanner, manual });
+  const t = rep.trades, d = rep.date.slice(8, 10) + '.' + rep.date.slice(5, 7) + '.';
+  const top = rep.actions[0] || (rep.findings.find(f => f.lvl === 'warn') || rep.findings[0] || {}).text || '';
+  log(`📋 Tagesbericht ${d}: ${t.closed} geschlossen, ${eur(t.pnl)} · ${rep.findings.length} Befund(e)${rep.actions.length ? ', ' + rep.actions.length + ' Schutz-Aktion(en)' : ''}`, rep.findings.slice(0, 4).map(f => ({ n: f.lvl === 'warn' ? '⚠️' : f.lvl === 'ok' ? '✅' : 'ℹ️', e: f.text.slice(0, 60) })), 'cfg');
+  for (const a of rep.actions) log('🛡️ ' + a, [{ n: 'Tages-Routine', e: 'Schutz' }], 'cfg');
+  NOTIFY({ id: 'daily:' + rep.date, kind: 'report', color: rep.findings.some(f => f.lvl === 'warn') || rep.actions.length ? 'red' : 'neutral', title: `📋 Tagesbericht ${d}: ${t.closed ? eur(t.pnl) + ' · ' + t.closed + ' Trade(s)' : 'keine Trades'}`, body: String(top).slice(0, 200) });
+  return rep; }
 const calHealth = () => { const N = require('./news'), c = N.calendarPause(); return { ok: c.ok, paused: c.paused, next: c.next ? { title: c.next.title, t: new Date(c.next.t).toISOString() } : null, note: c.note }; };
-module.exports = { calHealth, mt5Health, mt5Note: o => MT5.note(o), mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };
+module.exports = { dailyReport, reports: () => DAILY.reports(), calHealth, mt5Health, mt5Note: o => MT5.note(o), mt5Sync, mt5Poll: () => MT5.poll(), _alarms: alarms, start, stop, cycle, snapshot, analyze, setConfig, addAlarm, delAlarm, closeAll, closeOne, resetAccount, cfg: () => CFG, _S: S };

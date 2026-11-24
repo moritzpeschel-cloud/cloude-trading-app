@@ -128,6 +128,7 @@ function risiko(sym, sig, plan, tm, an, nw, ctx) {
   else add(an.bias * sig.dir > -.3, 'Nicht gegen den großen Trend', `Analyst ${an.bias >= 0 ? '+' : ''}${an.bias.toFixed(2)}`);
   add(!(nw.breaking && nw.breaking.s * sig.dir < 0), 'Keine Gegen-Eilmeldung', nw.breaking ? nw.breaking.title.slice(0, 50) : 'keine');
   if (nw.cal) add(!nw.cal.paused, 'Keine wichtigen Wirtschafts-Termine', nw.cal.paused ? `Pause: ${nw.cal.event.title} (${N.PAUSE_BEFORE} Min. vorher bis ${N.PAUSE_AFTER} Min. nachher)` : nw.cal.ok ? 'frei' : (nw.cal.note || 'Kalender nicht verfügbar'));
+  if (ctx.autoPause) add(false, 'Automatische Markt-Pause', `von der Tages-Routine pausiert bis ${new Date(ctx.autoPause).toLocaleDateString('de-DE')} (Live deutlich schwächer als im Test)`);
   if (ctx.shock) add(!ctx.shock.on, 'Keine Kurssprung-Pause', ctx.shock.on ? `${ctx.shock.atr.toFixed(1)} ATR in einer Kerze – ${ctx.shock.leftMin} Min. Pause` : 'ruhig');
   add(inst.spread / plan.risk < .12, 'Spread-Kosten', `${(inst.spread / plan.risk * 100).toFixed(1)} % des Risikos`);
   add(tm.adj.evR >= cfg.minEV, 'Erwartungswert (Rückblick)', `${tm.adj.evR >= 0 ? '+' : ''}${tm.adj.evR.toFixed(2)} R je Trade nach Kosten (min. ${cfg.minEV} R)`);
