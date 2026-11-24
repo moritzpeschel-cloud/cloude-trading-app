@@ -38,6 +38,13 @@ Siehe **docs/LABOR.md** (2 Jahre echte Kurse, Lern-/Prüfphase, nach allen Koste
 
 Optional prüft **Claude als KI-Prüfer** (`ANTHROPIC_API_KEY`, Schalter im Dashboard) jede fertige Order und kann mit Begründung ein Veto einlegen.
 
+## Tages-Routine (jeden Morgen 07:00 Berlin)
+Der Bot wertet den Vortag aus (Trades, Ergebnis, ausgelassene Signale und warum, Pausen, MT5-Verbindung, abgelehnte Orders, Datenfehler,
+Live vs. Test) und schickt den **Tagesbericht** als Push; im Dashboard unter *Trades → Tagesbericht*. Er passt sich **nur schützend** selbst an:
+Läuft ein Markt über ≥ 20 eigene Trades weit (2,5 Standardfehler) unter der Test-Erwartung, wird er 14 Tage pausiert. Risiko erhöhen oder
+Regeln ändern macht er nie selbst – Verbesserungen kommen als geprüfte Änderung (Tests + Labor auf echten Daten) und gehen erst nach Freigabe live.
+API: `GET /api/skill/report`, `POST /api/skill/report/run` (Sitzung oder Bot-Token).
+
 ## Dashboard
 * **Cockpit** – leuchtender Skill-Kern mit den 11 Helfer-Robotern auf der Bühne (Status-LED, Strahl zum Kern bei jeder Meldung, Antippen = Details), Kennzahlen, Trade-Plan (Ziel / Einstieg / Grenze / max. Verlust + Gesamtnote), Risiko-Prüfungen, Time-Machine-Bullauge, offene Trades, Journal.
 * **Märkte** – Scanner-Tabelle mit Sparklines, Kerzen-Chart mit Plan-Linien und Analyse aller 11 Helfer für jedes Symbol.

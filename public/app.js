@@ -214,7 +214,15 @@ function trades() { const A = SK.acc, s = A.stats; $('#eq-sub').textContent = `$
   $('#hist-sub').textContent = `${SK.hist.length} letzte`;
   $('#hist').innerHTML = SK.hist.length ? SK.hist.map(h => `<div class="item ${h.pnl > 0 ? 'win' : 'loss'}"><div class="a"><div><b>${esc(h.sym)}</b> ${side(h.dir)} <span class="mut">${h.lots}</span></div><b class="${cls(h.pnl)}">${sg(h.pnl)}</b></div>
     <div class="b">${nf(h.entry, h.dp)} → ${nf(h.exit, h.dp)} · ${sR(h.R)} · ${esc(h.reason)} · ${esc(h.by || '')} · ${tm(h.close)}</div></div>`).join('') : '<div class="empty">Noch keine geschlossenen Trades.</div>';
-  $('#jr').innerHTML = journal(40); }
+  $('#jr').innerHTML = journal(40); repCard(); }
+function repCard() { const el = $('#rep'); if (!el) return; const R = (SK.daily || {}).last, P = (SK.daily || {}).paused || {};
+  const pz = Object.entries(P).map(([s, u]) => `<div class="item loss"><div class="a"><b>${esc(s)} pausiert</b><span class="mut">bis ${new Date(u).toLocaleDateString('de-DE')}</span></div></div>`).join('');
+  if (!R) { el.innerHTML = pz + '<div class="empty">Der erste Bericht kommt morgen um 7:00 Uhr (Auswertung des Vortags).</div>'; return; }
+  $('#rep-sub').textContent = `für ${R.date.slice(8, 10)}.${R.date.slice(5, 7)}. · erstellt ${tm(R.at)}`;
+  const t = R.trades, ic = { warn: '⚠️', ok: '✅', info: 'ℹ️' };
+  el.innerHTML = `<div class="facts"><div class="fact"><div class="l">Ergebnis</div><div class="v ${cls(t.pnl)}">${sg(t.pnl)}</div></div><div class="fact"><div class="l">Trades</div><div class="v">${t.closed} (${t.wins} G / ${t.losses} V)</div></div><div class="fact"><div class="l">MT5 offline</div><div class="v">${R.tech.mt5DownMin} Min.</div></div></div>`
+   + (R.actions || []).map(a => `<div class="item loss"><div class="a"><b>🛡️ Automatische Schutz-Aktion</b></div><div class="b">${esc(a)}</div></div>`).join('') + pz
+   + (R.findings || []).map(f => `<div class="item ${f.lvl === 'warn' ? 'loss' : f.lvl === 'ok' ? 'win' : ''}"><div class="a"><span>${ic[f.lvl] || ''} ${esc(f.text)}</span></div></div>`).join(''); }
 
 // ---------- Mehr ----------
 const CFGUI = [['riskEur', 'Max. Verlust je Trade', '€', 1, 100, 1], ['maxDailyLossEur', 'Max. Verlust je Tag (inkl. offenem Risiko)', '€', 2, 500, 1], ['maxTradesDay', 'Max. Trades je Tag', '', 1, 20, 1], ['maxOpen', 'Max. offene Trades', '', 1, 10, 1], ['maxPerGroup', 'Max. je Markt-Gruppe', '', 1, 6, 1],

@@ -94,5 +94,21 @@ const U = require('./bot/util'), T = require('./bot/ta'), MC = require('./bot/mo
   assert.equal(MT.tick({}).length, 0, 'alte Trades nach Neustart ohne Push'); assert.equal(MT.acc().hist.length, 1);
   MT.sync({ account: acct, positions: [], orders: [], closed: [old, { ...old, position: 88, time: 3 }], prices: {} }, {});
   const evs = MT.tick({}); assert.equal(evs.length, 1, 'neuer geschlossener Trade meldet sich'); assert.equal(evs[0].h.id, 88);
+  // Tages-Routine (07:00): Bericht, Befunde, nur schützende Selbst-Anpassung
+  const DY = require('./bot/daily'); DY._reset(); const nowR = Date.parse('2026-11-24T06:30:00Z'), yd = Date.parse('2026-11-23T12:00:00Z');   // 07:30 Berlin
+  assert.ok(DY.due(nowR) && !DY.due(Date.parse('2026-11-24T05:30:00Z')), 'fällig erst ab 07:00 Berlin');
+  const mk = (n, R, sym = 'ETHUSD', t0 = yd - 40 * 864e5, step = 864e5) => Array.from({ length: n }, (_, k) => ({ sym, R, pnl: R * 5, open: t0 + k * step, close: t0 + k * step + 3600e3 }));
+  let rep = DY.build({ hist: [...mk(3, -1, 'BTCUSD', yd - 6 * 3600e3, 3600e3)], journal: [{ kind: 'skip', t: yd, text: 'ETHUSD KAUF (x) – nicht gehandelt: Risiko-Veto: Tageslimit (eigene Trades)' }], expect: { ETHUSD: .2 }, cfg: { riskMode: 'eur', riskEur: 5, maxDailyLossEur: 10 }, scanner: [{ sym: 'XAUUSD', play: 'x', tradeable: false }] }, nowR);
+  assert.equal(rep.date, '2026-11-23'); assert.equal(rep.trades.closed, 3); assert.equal(rep.trades.pnl, -15);
+  assert.ok(rep.findings.some(f => /Tageslimit/.test(f.text)), 'Tageslimit-Befund'); assert.ok(rep.findings.some(f => /XAUUSD/.test(f.text)), 'nicht handelbare Märkte genannt');
+  assert.ok(rep.findings.some(f => /Ausgelassene Signale/.test(f.text)), 'ausgelassene Signale gezählt'); assert.equal(rep.actions.length, 0, 'keine Schutz-Aktion bei 3 Trades');
+  assert.ok(!DY.due(nowR), 'nur einmal pro Tag');
+  DY._reset(); rep = DY.build({ hist: mk(20, -.3), expect: { ETHUSD: .2 } }, nowR); assert.equal(rep.actions.length, 0, 'leicht schwächer = Zufall, keine Pause');
+  DY._reset(); rep = DY.build({ hist: mk(20, -1.2), expect: { ETHUSD: .2 } }, nowR); assert.equal(rep.actions.length, 1, 'deutlich schwächer über 20 Trades → Pause');
+  assert.ok(DY.pausedUntil('ETHUSD', nowR) > nowR + 13 * 864e5);
+  const rkP = H2.risiko(...okArgs, { ...base, own: { realizedLoss: 0, openRisk: 0, entriesToday: 0, symsToday: [] }, newRisk: 4, autoPause: DY.pausedUntil('ETHUSD', nowR) });
+  assert.ok(!rkP.ok && rkP.checks.some(c => /Markt-Pause/.test(c.name)), 'pausierter Markt wird nicht gehandelt');
+  DY._reset(); rep = DY.build({ hist: [], journal: [] }, nowR); assert.ok(rep.findings[0].lvl === 'ok', 'ruhiger Tag ohne Befund');
+  DY.note('reject', { why: 'retcode 10019: No money' }); DY._reset();
   console.log('trader-skill: alle Tests bestanden'); process.exit(0);
 })().catch(e => { console.error('FEHLER', e); process.exit(1); });
